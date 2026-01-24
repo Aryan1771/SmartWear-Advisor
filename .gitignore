@@ -11,7 +11,6 @@ bin/
 # Ignore large model files; keep only the final versions (.tflite or .h5)
 *.h5
 *.tflite
-!src/ai_model/final_model.tflite
 
 # Local API Keys (Critical for Security)
 # Do not upload your OpenWeatherMap API key
