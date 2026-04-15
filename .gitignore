@@ -1,5 +1,38 @@
+# ========================
+# Added for SmartWear AI
+# ========================
+# Keep trained lightweight models (IMPORTANT)
+!model/*.tflite
+!ai_model/model/*.tflite
+# Ignore heavy intermediate training artifacts
+*.ckpt
+*.pb
+*.onnx
+# TensorFlow / Keras temp files
+.keras/
+*.keras_temp*
+# OpenCV temp / cache
+*.avi
+*.mp4
+# Logs
+logs/
+*.log
+# OS files
+.DS_Store
+Thumbs.db
+# VS Code (optional but useful)
+.vscode/
+# Temporary folders used in your project
+.tmp/
+.cache/
+# Prevent accidental upload of large datasets backups
+*.zip
+*.tar
+*.gz
+# Numpy training dumps (encodings already covered, but safer)
+*.npz
 # C++ Build Outputs
-data/raw/
+data/raw/*
 data/labeled/*
 !data/labeled/.gitkeep
 *.npy
