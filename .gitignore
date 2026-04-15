@@ -2,6 +2,8 @@
 data/raw/
 data/labeled/*
 !data/labeled/.gitkeep
+*.npy
+*.json
 *.exe
 *.out
 *.app
