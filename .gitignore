@@ -1,4 +1,7 @@
 # C++ Build Outputs
+data/raw/
+data/labeled/*
+!data/labeled/.gitkeep
 *.exe
 *.out
 *.app
