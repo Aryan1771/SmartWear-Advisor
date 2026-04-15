@@ -1,0 +1,8 @@
+kagglehub
+face-recognition
+opencv-python
+Pillow
+numpy
+tensorflow
+requests
+cv2

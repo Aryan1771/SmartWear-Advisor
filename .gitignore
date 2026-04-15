@@ -6,12 +6,12 @@
 *.obj
 build/
 bin/
-
-# Machine Learning Models and Data
 # Ignore large model files; keep only the final versions (.tflite or .h5)
 *.h5
+*.keras
 *.tflite
-
+*.pt
+*.pth
 # Local API Keys (Critical for Security)
 # Do not upload your OpenWeatherMap API key
 config.json
@@ -21,7 +21,6 @@ api_key.txt
 __pycache__/
 *.py[cod]
 *$py.class
-
 # C extensions
 *.so
 
