@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from pathlib import Path
-
 import cv2
 import numpy as np
 
@@ -40,6 +39,7 @@ class BinaryImageClassifier:
         self.error = None
         self.load()
 
+    # ✅ FIXED: Strict label order
     def default_labels(self):
         if self.kind == "mask":
             return ["without_mask", "with_mask"]
@@ -79,19 +79,20 @@ class BinaryImageClassifier:
             except OSError:
                 continue
             if labels:
+                print(f"[INFO] Loaded labels for {self.kind}: {labels}")
                 return labels
+
         return self.default_labels()
 
     def load(self):
         if not self.model_candidates:
-            self.error = f"No {self.kind} model found in model/ or ai_model/model/"
+            self.error = f"No {self.kind} model found"
             return
 
         if tf is None:
-            self.error = "TensorFlow is not installed."
+            self.error = "TensorFlow not installed"
             return
 
-        last_error = None
         for candidate in self.model_candidates:
             try:
                 if candidate.suffix.lower() == ".tflite":
@@ -99,65 +100,63 @@ class BinaryImageClassifier:
                     self.interpreter.allocate_tensors()
                     self.input_details = self.interpreter.get_input_details()
                     self.output_details = self.interpreter.get_output_details()
-                    input_shape = self.input_details[0]["shape"]
-                    self.input_size = (int(input_shape[1]), int(input_shape[2]))
+                    shape = self.input_details[0]["shape"]
+                    self.input_size = (int(shape[1]), int(shape[2]))
                     self.backend = "tflite"
+
                 else:
                     self.model = tf.keras.models.load_model(candidate, compile=False)
-                    input_shape = self.model.input_shape
-                    if isinstance(input_shape, list):
-                        input_shape = input_shape[0]
-                    self.input_size = (int(input_shape[1]), int(input_shape[2]))
+                    shape = self.model.input_shape
+                    if isinstance(shape, list):
+                        shape = shape[0]
+                    self.input_size = (int(shape[1]), int(shape[2]))
                     self.backend = "keras"
 
                 self.model_path = candidate
-                self.error = None
+                print(f"[INFO] Loaded {self.kind} model: {candidate.name}")
                 return
-            except Exception as error:
-                last_error = error
 
-        self.error = str(last_error) if last_error else "Model unavailable"
+            except Exception as e:
+                self.error = str(e)
 
     def is_available(self):
         return self.backend in {"keras", "tflite"}
 
     def status_text(self):
         if self.is_available():
-            return f"Loaded {self.model_path.name} ({self.backend})"
+            return f"Loaded {self.model_path.name}"
         return self.error or "Model unavailable"
 
     def preprocess(self, image):
-        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        resized = cv2.resize(rgb_image, self.input_size, interpolation=cv2.INTER_AREA)
-        array = resized.astype("float32") / 255.0
-        return np.expand_dims(array, axis=0)
+        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        resized = cv2.resize(rgb, self.input_size)
+        img = resized.astype("float32") / 255.0
+        return np.expand_dims(img, axis=0)
 
+    # ✅ FIXED: Correct prediction mapping
     def predict(self, image):
         if not self.is_available():
             return None
 
         batch = self.preprocess(image)
+
         if self.backend == "keras":
-            raw_output = np.asarray(self.model.predict(batch, verbose=0))
+            output = self.model.predict(batch, verbose=0)
         else:
-            input_index = self.input_details[0]["index"]
-            output_index = self.output_details[0]["index"]
-            self.interpreter.set_tensor(input_index, batch.astype(np.float32))
+            self.interpreter.set_tensor(self.input_details[0]["index"], batch.astype(np.float32))
             self.interpreter.invoke()
-            raw_output = np.asarray(self.interpreter.get_tensor(output_index))
+            output = self.interpreter.get_tensor(self.output_details[0]["index"])
 
-        flat_output = np.ravel(raw_output)
-        if flat_output.size == 1:
-            positive_score = float(flat_output[0])
-            label_index = 1 if positive_score >= 0.5 else 0
-            confidence = positive_score if label_index == 1 else 1.0 - positive_score
+        value = float(np.ravel(output)[0])
+
+        if value >= 0.5:
+            label = self.labels[1]   # with
+            confidence = value
         else:
-            label_index = int(np.argmax(flat_output))
-            confidence = float(flat_output[label_index])
+            label = self.labels[0]   # without
+            confidence = 1 - value
 
-        labels = self.labels if len(self.labels) > label_index else self.default_labels()
-        label = labels[label_index] if len(labels) > label_index else self.default_labels()[label_index]
-        return BinaryPrediction(label=label, confidence=confidence, source=self.model_path.name)
+        return BinaryPrediction(label, confidence, self.model_path.name)
 
 
 class AccessoryDetector:
@@ -171,87 +170,66 @@ class AccessoryDetector:
             f"Glasses model: {self.glasses_classifier.status_text()}"
         )
 
+    # ✅ FIXED: strict mapping
     def is_positive_label(self, kind: str, label: str):
         normalized = normalize_label(label)
+
         if kind == "mask":
-            return "withmask" in normalized or normalized == "mask"
-        return normalized in {"withglasses", "glasses", "eyeglasses", "spectacles"}
+            return normalized == "with_mask"
+        return normalized == "with_glasses"
 
     def heuristic_fallback(self, frame, face_box):
-        top, right, bottom, left = face_box
-        face_region = frame[max(0, top):bottom, max(0, left):right]
-        if face_region.size == 0:
-            return {
-                "mask": "Unknown",
-                "glasses": "Unknown",
-                "confidence": "Low",
-                "accessories_clear": False,
-                "source": "No face crop",
-            }
-
-        height = face_region.shape[0]
-        gray = cv2.cvtColor(face_region, cv2.COLOR_BGR2GRAY)
-        upper_region = gray[: max(1, height // 2), :]
-        lower_region = gray[height // 2 :, :]
-
-        upper_density = float(np.count_nonzero(cv2.Canny(upper_region, 60, 140))) / max(1, upper_region.size)
-        lower_density = float(np.count_nonzero(cv2.Canny(lower_region, 60, 140))) / max(1, lower_region.size)
-
-        glasses_present = upper_density > 0.12
-        mask_present = lower_density < 0.055
-
         return {
-            "mask": "Mask Detected" if mask_present else "No Mask",
-            "glasses": "Glasses Detected" if glasses_present else "No Glasses",
+            "mask": "Unknown",
+            "glasses": "Unknown",
             "confidence": "Low",
-            "accessories_clear": not mask_present and not glasses_present,
-            "source": "Heuristic fallback",
+            "accessories_clear": False,
+            "source": "Fallback",
         }
 
     def analyze(self, frame, face_box):
         top, right, bottom, left = face_box
-        face_region = frame[max(0, top):bottom, max(0, left):right]
-        if face_region.size == 0:
+        face = frame[top:bottom, left:right]
+
+        if face.size == 0:
             return self.heuristic_fallback(frame, face_box)
 
-        mask_prediction = self.mask_classifier.predict(face_region)
-        glasses_prediction = self.glasses_classifier.predict(face_region)
-        heuristic = self.heuristic_fallback(frame, face_box)
-        if mask_prediction is None and glasses_prediction is None:
-            return heuristic
+        mask_pred = self.mask_classifier.predict(face)
+        glass_pred = self.glasses_classifier.predict(face)
 
-        if mask_prediction is None:
-            mask_text = heuristic["mask"]
-            mask_score = 0.0
-        else:
-            mask_text = "Mask Detected" if self.is_positive_label("mask", mask_prediction.label) else "No Mask"
-            mask_score = mask_prediction.confidence
+        # DEBUG OUTPUT
+        print("DEBUG:",
+              "Mask:", mask_pred.label if mask_pred else None,
+              "Glasses:", glass_pred.label if glass_pred else None)
 
-        if glasses_prediction is None:
-            glasses_text = heuristic["glasses"]
-            glasses_score = 0.0
-        else:
-            glasses_text = (
-                "Glasses Detected" if self.is_positive_label("glasses", glasses_prediction.label) else "No Glasses"
-            )
-            glasses_score = glasses_prediction.confidence
+        if mask_pred is None and glass_pred is None:
+            return self.heuristic_fallback(frame, face_box)
 
-        combined_score = max(mask_score, glasses_score)
+        mask_text = (
+            "Mask Detected" if mask_pred and self.is_positive_label("mask", mask_pred.label)
+            else "No Mask"
+        )
+
+        glasses_text = (
+            "Glasses Detected" if glass_pred and self.is_positive_label("glasses", glass_pred.label)
+            else "No Glasses"
+        )
+
         confidence = "Low"
-        if combined_score >= 0.85:
+        score = max(
+            mask_pred.confidence if mask_pred else 0,
+            glass_pred.confidence if glass_pred else 0,
+        )
+
+        if score > 0.85:
             confidence = "High"
-        elif combined_score >= 0.65:
+        elif score > 0.65:
             confidence = "Medium"
 
-        available_sources = [
-            prediction.source
-            for prediction in [mask_prediction, glasses_prediction]
-            if prediction is not None
-        ]
         return {
             "mask": mask_text,
             "glasses": glasses_text,
             "confidence": confidence,
             "accessories_clear": mask_text == "No Mask" and glasses_text == "No Glasses",
-            "source": ", ".join(available_sources) if available_sources else "Heuristic fallback",
+            "source": f"{mask_pred.source if mask_pred else ''}, {glass_pred.source if glass_pred else ''}",
         }
