@@ -5,4 +5,7 @@ Pillow
 numpy
 tensorflow
 requests
-cv2
+fastapi
+uvicorn
+opencv-python-headless
+python-multipart

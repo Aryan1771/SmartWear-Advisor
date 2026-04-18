@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SmartWear Advisor</title>
+</head>
+<body style="background:#0d1117;color:white;text-align:center">
+
+<h1>SmartWear Advisor</h1>
+
+<video id="video" autoplay width="500"></video>
+<br><br>
+
+<button onclick="startCamera()">Start Camera</button>
+<button onclick="capture()">Analyze</button>
+
+<h2 id="result"></h2>
+
+<script>
+let video = document.getElementById("video");
+
+async function startCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  video.srcObject = stream;
+}
+
+async function capture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0);
+
+  const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg"));
+
+  let formData = new FormData();
+  formData.append("file", blob);
+
+  let res = await fetch("YOUR_BACKEND_URL/analyze", {
+    method: "POST",
+    body: formData
+  });
+
+  let data = await res.json();
+
+  document.getElementById("result").innerText =
+    `User: ${data.name}
+Mask: ${data.accessories.mask}
+Glasses: ${data.accessories.glasses}
+Temp: ${data.weather.temp}`;
+}
+</script>
+
+</body>
+</html>
