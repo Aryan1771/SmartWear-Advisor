@@ -1,111 +1,128 @@
 import React, { useEffect, useRef, useState } from "react";
-
 function App() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const wsRef = useRef(null);
-
+  const rafRef = useRef(null);
+  const lastSendRef = useRef(0);
   const [result, setResult] = useState({});
+  const connectWS = () => {
+  const socket = new WebSocket(WS_URL);
 
+  socket.onopen = () => console.log("WS connected");
+
+  socket.onclose = () => {
+    console.log("WS disconnected. Reconnecting...");
+    setTimeout(connectWS, 2000);
+  };
+
+  socket.onerror = () => socket.close();
+
+  socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    setResult(data);
+    requestAnimationFrame(() => drawBox(data));
+  };
+
+  wsRef.current = socket;
+};
+connectWS();
   useEffect(() => {
     startCamera();
-
-    // WebSocket URL: prefer REACT_APP_WS_URL, else use production Render URL, then fall back to localhost
-    const renderHost = "smartwear-backend-3moi.onrender.com";
-    const defaultWs =
+    connectWebSocket();
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (wsRef.current) wsRef.current.close();
+    };
+  }, []);
+  const connectWebSocket = () => {
+    const host = "smartwear-backend-3moi.onrender.com";
+    const WS_URL =
       process.env.REACT_APP_WS_URL ||
-      `wss://${renderHost}/ws` ||
-      "ws://127.0.0.1:8000/ws";
-    // API base (for future REST calls)
-    const API_BASE = process.env.REACT_APP_API_URL || `https://${renderHost}`;
-    const socket = new WebSocket(defaultWs);
-
+      (window.location.hostname === "localhost"
+        ? "ws://127.0.0.1:8000/ws"
+        : `wss://${host}/ws`);
+    const socket = new WebSocket(WS_URL);
+    socket.onopen = () => console.log("WS Connected");
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         setResult(data);
-        drawBox(data);
+        requestAnimationFrame(() => drawBox(data));
       } catch (e) {
         console.warn("Invalid WS message", e);
       }
     };
-
-    socket.onopen = () => console.log("WS connected", defaultWs);
-    socket.onclose = () => console.log("WS closed");
-
-    wsRef.current = socket;
-
-    return () => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) wsRef.current.close();
+    socket.onclose = () => {
+      console.log("❌ WS Closed → Reconnecting...");
+      setTimeout(connectWebSocket, 2000);
     };
-  }, []);
-
-  // 🎥 Start Camera
-  const startCamera = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    videoRef.current.srcObject = stream;
-
-    requestAnimationFrame(sendFrame); // 🔥 better than setInterval
+    wsRef.current = socket;
   };
-
-  // ⚡ PERFORMANCE BOOST
-  const lastSendRef = React.useRef(0);
-  const rafRef = React.useRef(null);
+  const startCamera = async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480 },
+    });
+    videoRef.current.srcObject = stream;
+    videoRef.current.onloadedmetadata = () => {
+      rafRef.current = requestAnimationFrame(sendFrame);
+    };
+  };
   const sendFrame = (time) => {
     if (!videoRef.current || !wsRef.current) {
       rafRef.current = requestAnimationFrame(sendFrame);
       return;
     }
-
-    // 🔥 send only every 200ms (5 FPS)
-    if (time - lastSendRef.current > 200 && wsRef.current.readyState === 1) {
+    if (
+      time - lastSendRef.current > 200 &&
+      wsRef.current.readyState === 1
+    ) {
       const canvas = document.createElement("canvas");
-      canvas.width = videoRef.current.videoWidth || 640;
-      canvas.height = videoRef.current.videoHeight || 480;
-
+      canvas.width = 320;
+      canvas.height = 240;
       const ctx = canvas.getContext("2d");
-      ctx.drawImage(videoRef.current, 0, 0);
-
-      const base64 = canvas.toDataURL("image/jpeg", 0.6); // 🔥 compress
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      const base64 = canvas.toDataURL("image/jpeg", 0.6);
       try {
         wsRef.current.send(base64);
       } catch (e) {
-        console.warn("WS send failed", e);
+        console.warn("WS send error");
       }
-
       lastSendRef.current = time;
     }
-
     rafRef.current = requestAnimationFrame(sendFrame);
   };
-
-  // 🎯 Draw bounding box
   const drawBox = (data) => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
-
     if (!canvas || !video) return;
-
     const ctx = canvas.getContext("2d");
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
+    canvas.width = video.clientWidth;
+    canvas.height = video.clientHeight;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (data.box) {
-      const { top, right, bottom, left } = data.box;
-
-      ctx.strokeStyle = "lime";
-      ctx.lineWidth = 3;
-
-      ctx.strokeRect(left, top, right - left, bottom - top);
-
-      ctx.fillStyle = "lime";
-      ctx.fillText(data.name || "Unknown", left, top - 10);
-    }
+    if (!data.box || data.status !== "success") return;
+    const { top, right, bottom, left } = data.box;
+    const scaleX = canvas.width / video.videoWidth;
+    const scaleY = canvas.height / video.videoHeight;
+    let x = left * scaleX;
+    let y = top * scaleY;
+    let width = (right - left) * scaleX;
+    let height = (bottom - top) * scaleY;
+    x = canvas.width - (x + width);
+    const color = data.name !== "Unknown" ? "#00ff88" : "#ffaa00";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, width, height);
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y - 28, width, 28);
+    ctx.fillStyle = "#000";
+    ctx.font = "bold 14px Segoe UI";
+    ctx.fillText(
+      `${data.name} | ${data.mask} | ${data.glasses}`,
+      x + 5,
+      y - 8
+    );
   };
-
   return (
     <div style={{
       background: "#0d1117",
@@ -115,24 +132,32 @@ function App() {
       fontFamily: "Segoe UI"
     }}>
       <h1>SmartWear Advisor</h1>
-
       <div style={{ display: "flex", gap: "20px" }}>
-
-        {/* CAMERA + OVERLAY */}
+        {/* CAMERA */}
         <div style={{ position: "relative", flex: 3 }}>
-          <video ref={videoRef} autoPlay style={{ width: "100%" }} />
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            style={{
+              width: "100%",
+              borderRadius: "10px",
+              transform: "scaleX(-1)"
+            }}
+          />
           <canvas
             ref={canvasRef}
             style={{
               position: "absolute",
               top: 0,
               left: 0,
-              width: "100%"
+              width: "100%",
+              height: "100%",
+              pointerEvents: "none"
             }}
           />
         </div>
-
-        {/* SIDE PANEL */}
+        {/* PANEL */}
         <div style={{ flex: 2 }}>
           <Card title="User" value={result.name || "Waiting..."} />
           <Card title="Mask" value={result.mask || "--"} />
@@ -143,7 +168,6 @@ function App() {
     </div>
   );
 }
-
 function Card({ title, value }) {
   return (
     <div style={{
@@ -157,5 +181,4 @@ function Card({ title, value }) {
     </div>
   );
 }
-
 export default App;

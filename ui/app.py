@@ -541,8 +541,8 @@ class SmartWearApp:
         weather = self.fetch_weather(self.weather_city.get().strip() or "Delhi")
         recommendations = generate_recommendation(
             weather=weather,
-            is_mask=accessories["mask"] == "Mask Detected",
-            is_glasses=accessories["glasses"] == "Glasses Detected",
+            is_mask="No" not in str(accessories.get("mask", "")),
+            is_glasses="No" not in str(accessories.get("glasses", "")),
         )
 
         detail_window = tk.Toplevel(self.root)

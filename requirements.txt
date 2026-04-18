@@ -1,11 +1,13 @@
 kagglehub
 face-recognition
 opencv-python
-Pillow
+pillow
 numpy
-tensorflow
-requests
 fastapi
 uvicorn
 opencv-python-headless
 python-multipart
+opencv-stubs
+dlibs
+requests
+tensorflow==2.13.0

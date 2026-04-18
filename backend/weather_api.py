@@ -1,9 +1,6 @@
 import os
 import requests
-
-
 def get_weather(city):
-    # Read API key from environment. Set OPENWEATHER_API_KEY in your Render/host settings.
     api_key = os.getenv("OPENWEATHER_API_KEY", "").strip()
     if not api_key:
         return {
