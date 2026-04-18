@@ -16,7 +16,8 @@ except ModuleNotFoundError:
 try:
     from backend.recommendation_engine import generate_recommendation
     from backend.weather_api import get_weather
-    from ui.model_utils import AccessoryDetector
+    from core.accessory_engine import AccessoryDetector
+    from core.face_engine import recognize_face
 except ModuleNotFoundError:
     import sys
 
@@ -25,7 +26,8 @@ except ModuleNotFoundError:
         sys.path.insert(0, str(ROOT_DIR))
     from backend.recommendation_engine import generate_recommendation
     from backend.weather_api import get_weather
-    from ui.model_utils import AccessoryDetector
+    from core.accessory_engine import AccessoryDetector
+    from core.face_engine import recognize_face
 
 
 APP_DIR = Path(__file__).resolve().parents[1]
@@ -148,7 +150,9 @@ class SmartWearApp:
         self.recognition_text = tk.StringVar(value="Waiting for a registered face")
         self.accessory_text = tk.StringVar(value="Accessories: --")
         self.user_text = tk.StringVar(value="User profile not loaded")
-        self.model_text = tk.StringVar(value=self.accessory_detector.status_summary())
+        # accessory_engine may not provide `status_summary`; fall back safely
+        status_summary = getattr(self.accessory_detector, "status_summary", lambda: "Accessory detector ready")()
+        self.model_text = tk.StringVar(value=status_summary)
 
         self.build_layout()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -481,7 +485,12 @@ class SmartWearApp:
                 cv2.rectangle(preview, (left, top), (right, bottom), (0, 255, 255), 2)
                 accessories = self.accessory_detector.analyze(frame, face_box)
 
-                if accessories["accessories_clear"]:
+                # Accessory detector returns mask/glasses labels — consider registration clear
+                accessories_clear = (
+                    str(accessories.get("mask", "")).lower().startswith("no")
+                    and str(accessories.get("glasses", "")).lower().startswith("no")
+                )
+                if accessories_clear:
                     encodings = face_recognition.face_encodings(rgb_frame, [face_box])
                     if encodings:
                         self.registry.register(name, encodings[0])
