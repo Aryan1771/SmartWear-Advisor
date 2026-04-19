@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ name }} | Detail View</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0d1117] text-[#f0f6fc] p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-4xl font-bold mb-2">Recognized: {{ name }}</h1>
+        <p class="text-[#8b949e] mb-8">User profile, accessory status, and weather-aware recommendations</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-[#161b22] border border-[#30363d] p-6 rounded-lg">
+                <h2 class="text-xl font-bold mb-4">User Details</h2>
+                <p><span class="text-[#8b949e]">Name:</span> {{ name }}</p>
+                <p><span class="text-[#8b949e]">Registered On:</span> {{ profile.registered_on or 'N/A' }}</p>
+                <p class="mt-4 text-sm text-[#8b949e] italic">{{ profile.notes or 'No profile notes available.' }}</p>
+            </div>
+
+            <div class="bg-[#161b22] border border-[#30363d] p-6 rounded-lg">
+                <h2 class="text-xl font-bold mb-4">Face & Accessory Status</h2>
+                <p><span class="text-[#8b949e]">Recognition:</span> Success</p>
+                <p><span class="text-[#8b949e]">Mask:</span> {{ acc.mask }}</p>
+                <p><span class="text-[#8b949e]">Glasses:</span> {{ acc.glasses }}</p>
+            </div>
+
+            <div class="bg-[#161b22] border border-[#30363d] p-6 rounded-lg">
+                <h2 class="text-xl font-bold mb-4">Weather Snapshot</h2>
+                <p><span class="text-[#8b949e]">City:</span> {{ weather.city }}</p>
+                <p><span class="text-[#8b949e]">Temp:</span> {{ weather.temp }}°C</p>
+                <p><span class="text-[#8b949e]">Condition:</span> {{ weather.condition }}</p>
+            </div>
+
+            <div class="bg-[#161b22] border border-[#30363d] p-6 rounded-lg">
+                <h2 class="text-xl font-bold mb-4">Recommendations</h2>
+                <p class="text-[#f2cc60]">{{ recs }}</p>
+            </div>
+        </div>
+
+        <a href="/" class="inline-block mt-8 bg-[#21262d] border border-[#30363d] px-6 py-2 rounded hover:bg-[#30363d] transition">
+            Return to Live Camera
+        </a>
+    </div>
+</body>
+</html>

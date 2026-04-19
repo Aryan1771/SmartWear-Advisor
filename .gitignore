@@ -9,6 +9,7 @@
 *.pb
 *.onnx
 # TensorFlow / Keras temp files
+node_modules/
 .keras/
 *.keras_temp*
 # OpenCV temp / cache

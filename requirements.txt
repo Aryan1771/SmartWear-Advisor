@@ -8,6 +8,6 @@ uvicorn
 opencv-python-headless
 python-multipart
 opencv-stubs
-dlibs
+dlib
 requests
 tensorflow==2.13.0

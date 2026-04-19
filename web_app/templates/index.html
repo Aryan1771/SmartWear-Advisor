@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SmartWear Advisor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#0d1117] text-[#f0f6fc] p-8">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold mb-2">SmartWear Advisor</h1>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
+                <div class="relative w-full aspect-video bg-black flex items-center justify-center">
+                    <img id="video-feed" src="" class="w-full h-full object-cover">
+                    <div id="offline-ui" class="absolute text-center text-[#8b949e]">
+                        <p class="text-xl">Camera Offline</p>
+                    </div>
+                </div>
+                <div class="p-4 border-t border-[#30363d] flex justify-between text-sm">
+                    <span id="status-msg">Standby</span>
+                    <span id="location-msg" class="text-blue-400">GPS Locating...</span>
+                </div>
+            </div>
+            <div class="space-y-4">
+                <div class="bg-[#161b22] border border-[#30363d] p-4 rounded-lg">
+                    <h2 class="font-bold mb-4">Controls</h2>
+                    <input type="text" id="city" value="Delhi" class="w-full bg-[#0d1117] border border-[#30363d] p-2 rounded mb-4">
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="startCamera()" class="bg-[#238636] py-2 rounded font-bold">Start</button>
+                        <button onclick="stopCamera()" class="bg-[#da3633] py-2 rounded font-bold">Stop</button>
+                    </div>
+                    <button onclick="registerFace()" class="w-full bg-[#388bfd] py-2 rounded font-bold mt-2">Register Face</button>
+                </div>
+                <div class="bg-[#1f2937] p-4 rounded-lg border border-[#30363d]">
+                    <p class="text-xs text-[#8b949e] font-bold">RECOGNITION</p>
+                    <p id="name-display" class="text-lg">Waiting...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        let userCoords = { lat: null, lon: null };
+        window.onload = () => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(p => {
+                    userCoords = { lat: p.coords.latitude, lon: p.coords.longitude };
+                    document.getElementById('location-msg').innerText = "GPS Connected";
+                });
+            }
+        };
+        function startCamera() {
+            document.getElementById('video-feed').src = "/video_feed";
+            document.getElementById('offline-ui').classList.add('hidden');
+            document.getElementById('status-msg').innerText = "Streaming...";
+        }
+        async function stopCamera() {
+            document.getElementById('video-feed').src = "";
+            document.getElementById('offline-ui').classList.remove('hidden');
+            await fetch('/stop_camera', { method: 'POST' });
+        }
+        function registerFace() {
+            const name = prompt("Enter Name:");
+            if(name) fetch('/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name: name })
+            }).then(r => r.json()).then(d => alert(d.message));
+        }
+        setInterval(() => {
+            if (document.getElementById('video-feed').src.includes("video_feed")) {
+                fetch('/get_status').then(r => r.json()).then(data => {
+                    if(data.name && data.name !== "Unknown" && data.name !== "None") {
+                        document.getElementById('name-display').innerText = data.name;
+                        let url = `/detail/${data.name}?lat=${userCoords.lat}&lon=${userCoords.lon}&city=${document.getElementById('city').value}`;
+                        setTimeout(() => window.location.href = url, 2000);
+                    }
+                });
+            }
+        }, 3000);
+    </script>
+</body>
+</html>
