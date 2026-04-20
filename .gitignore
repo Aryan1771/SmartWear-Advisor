@@ -2,7 +2,10 @@
 # Added for SmartWear AI
 # ========================
 # Keep trained lightweight models (IMPORTANT)
-!model/*.tflite
+# Ensure models are NOT ignored
+!models/*.keras
+!models/*.tflite
+!models/*.txt
 !ai_model/model/*.tflite
 # Ignore heavy intermediate training artifacts
 *.ckpt
