@@ -80,31 +80,47 @@
         }
 
         async function processLoop() {
-            if (!active) return;
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            const frame = canvas.toDataURL('image/jpeg', 0.5);
+    if (!active) return;
 
-            try {
-                const res = await fetch('/process_remote_frame', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ image: frame })
-                });
-                const data = await res.json();
-                
-                if (data.name && data.name !== "Unknown") {
-                    document.getElementById('name-display').innerText = data.name;
-                    const city = document.getElementById('city').value;
-                    // PASS DATA TO URL SO DETAIL PAGE ISN'T N/A
-                    window.location.href = `/detail/${data.name}?lat=${userCoords.lat}&lon=${userCoords.lon}&city=${city}&mask=${data.mask}&glasses=${data.glasses}`;
-                    return; 
-                }
-            } catch (e) { console.error("Server Link Broken"); }
-            setTimeout(processLoop, 1000);
+    // MOBILE FIX: Check if video is actually ready
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+        setTimeout(processLoop, 500); // Wait 0.5s and try again
+        return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+
+    const frame = canvas.toDataURL('image/jpeg', 0.5);
+
+    try {
+        const response = await fetch('/process_remote_frame', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: frame })
+        });
+
+        const data = await response.json();
+        
+        // If server says frame was empty, just loop back
+        if (data.status === "empty_frame") {
+            setTimeout(processLoop, 500);
+            return;
         }
 
+        if (data.name && data.name !== "Unknown") {
+            // Success logic...
+            const cityVal = document.getElementById('city').value;
+            window.location.href = `/detail/${data.name}?lat=${userCoords.lat}&lon=${userCoords.lon}&city=${cityVal}&mask=${data.mask || 'No Mask'}&glasses=${data.glasses || 'No Glasses'}`;
+            return; 
+        }
+    } catch (err) {
+        console.error("Link error");
+    }
+
+    setTimeout(processLoop, 1000); // Standard heartbeat
+}
         async function registerFace() {
             const name = prompt("Enter Name:");
             if(!name) return;
