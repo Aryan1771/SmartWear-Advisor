@@ -1,45 +1,66 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>{{ name }} | Detail View</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{{ name }} | Advisor Details</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-[#0d1117] text-[#f0f6fc] p-8">
+<body class="bg-[#0d1117] text-[#f0f6fc] p-4 md:p-8">
     <div class="max-w-4xl mx-auto">
-        <h1 class="text-4xl font-bold mb-2">Recognized: {{ name }}</h1>
-        <p class="text-[#8b949e] mb-8">User profile, accessory status, and weather-aware recommendations</p>
+        <header class="mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold mb-2">Recognized: {{ name }}</h1>
+            <p class="text-[#8b949e]">Personalized weather & accessory analysis</p>
+        </header>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
             <div class="bg-[#161b22] border border-[#30363d] p-6 rounded-lg">
-                <h2 class="text-xl font-bold mb-4">User Details</h2>
-                <p><span class="text-[#8b949e]">Name:</span> {{ name }}</p>
-                <p><span class="text-[#8b949e]">Registered On:</span> {{ profile.registered_on or 'N/A' }}</p>
-                <p class="mt-4 text-sm text-[#8b949e] italic">{{ profile.notes or 'No profile notes available.' }}</p>
+                <h2 class="text-sm font-bold mb-4 text-blue-500 uppercase tracking-wider">User Details</h2>
+                <div class="space-y-1">
+                    <p><span class="text-[#8b949e]">Name:</span> {{ name }}</p>
+                    <p><span class="text-[#8b949e]">Registered:</span> {{ profile.registered_on or 'N/A' }}</p>
+                    <p class="mt-4 text-sm text-[#8b949e] italic border-l-2 border-[#30363d] pl-3">
+                        {{ profile.notes or 'Remote Registration' }}
+                    </p>
+                </div>
             </div>
 
             <div class="bg-[#161b22] border border-[#30363d] p-6 rounded-lg">
-                <h2 class="text-xl font-bold mb-4">Face & Accessory Status</h2>
-                <p><span class="text-[#8b949e]">Recognition:</span> Success</p>
-                <p><span class="text-[#8b949e]">Mask:</span> {{ acc.mask }}</p>
-                <p><span class="text-[#8b949e]">Glasses:</span> {{ acc.glasses }}</p>
+                <h2 class="text-sm font-bold mb-4 text-blue-500 uppercase tracking-wider">Accessory Status</h2>
+                <div class="space-y-1">
+                    <p><span class="text-[#8b949e]">Face Match:</span> <span class="text-green-400">Success</span></p>
+                    <p><span class="text-[#8b949e]">Mask:</span> {{ acc.mask }}</p>
+                    <p><span class="text-[#8b949e]">Glasses:</span> {{ acc.glasses }}</p>
+                </div>
             </div>
 
             <div class="bg-[#161b22] border border-[#30363d] p-6 rounded-lg">
-                <h2 class="text-xl font-bold mb-4">Weather Snapshot</h2>
-                <p><span class="text-[#8b949e]">City:</span> {{ weather.city }}</p>
-                <p><span class="text-[#8b949e]">Temp:</span> {{ weather.temp }}°C</p>
-                <p><span class="text-[#8b949e]">Condition:</span> {{ weather.condition }}</p>
+                <h2 class="text-sm font-bold mb-4 text-blue-500 uppercase tracking-wider">Environment</h2>
+                <div class="space-y-1">
+                    <p><span class="text-[#8b949e]">City:</span> {{ weather.city }}</p>
+                    <p><span class="text-[#8b949e]">Temp:</span> {{ weather.temp }}°C</p>
+                    <p><span class="text-[#8b949e]">Condition:</span> {{ weather.condition }}</p>
+                </div>
             </div>
 
-            <div class="bg-[#161b22] border border-[#30363d] p-6 rounded-lg">
-                <h2 class="text-xl font-bold mb-4">Recommendations</h2>
-                <p class="text-[#f2cc60]">{{ recs }}</p>
+            <div class="bg-[#1f2937] border border-blue-500/30 p-6 rounded-lg shadow-xl">
+                <h2 class="text-sm font-bold mb-4 text-yellow-500 uppercase tracking-wider">Smart Advisor</h2>
+                <ul class="space-y-3">
+                    {% for item in recs %}
+                    <li class="flex items-start gap-2 text-gray-100">
+                        <span class="text-yellow-500">✦</span> {{ item }}
+                    </li>
+                    {% endfor %}
+                </ul>
             </div>
         </div>
 
-        <a href="/" class="inline-block mt-8 bg-[#21262d] border border-[#30363d] px-6 py-2 rounded hover:bg-[#30363d] transition">
-            Return to Live Camera
-        </a>
+        <div class="mt-8 flex flex-col md:flex-row gap-4">
+            <a href="/" class="text-center bg-[#21262d] border border-[#30363d] px-8 py-3 rounded hover:bg-[#30363d] transition">
+                Return to Live Camera
+            </a>
+        </div>
     </div>
 </body>
 </html>
