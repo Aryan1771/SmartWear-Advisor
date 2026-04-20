@@ -17,18 +17,18 @@
             
             <div class="bg-[#161b22] border border-[#30363d] p-6 rounded-lg">
                 <h2 class="text-sm font-bold mb-4 text-blue-500 uppercase tracking-wider">User Details</h2>
-                <div class="space-y-1">
+                <div class="space-y-1 text-gray-300">
                     <p><span class="text-[#8b949e]">Name:</span> {{ name }}</p>
                     <p><span class="text-[#8b949e]">Registered:</span> {{ profile.registered_on or 'N/A' }}</p>
                     <p class="mt-4 text-sm text-[#8b949e] italic border-l-2 border-[#30363d] pl-3">
-                        {{ profile.notes or 'Remote Registration' }}
+                        {{ profile.notes or 'Mobile Registration' }}
                     </p>
                 </div>
             </div>
 
             <div class="bg-[#161b22] border border-[#30363d] p-6 rounded-lg">
-                <h2 class="text-sm font-bold mb-4 text-blue-500 uppercase tracking-wider">Accessory Status</h2>
-                <div class="space-y-1">
+                <h2 class="text-sm font-bold mb-4 text-blue-500 uppercase tracking-wider">Detection Status</h2>
+                <div class="space-y-1 text-gray-300">
                     <p><span class="text-[#8b949e]">Face Match:</span> <span class="text-green-400">Success</span></p>
                     <p><span class="text-[#8b949e]">Mask:</span> {{ acc.mask }}</p>
                     <p><span class="text-[#8b949e]">Glasses:</span> {{ acc.glasses }}</p>
@@ -36,8 +36,8 @@
             </div>
 
             <div class="bg-[#161b22] border border-[#30363d] p-6 rounded-lg">
-                <h2 class="text-sm font-bold mb-4 text-blue-500 uppercase tracking-wider">Environment</h2>
-                <div class="space-y-1">
+                <h2 class="text-sm font-bold mb-4 text-blue-500 uppercase tracking-wider">Local Environment</h2>
+                <div class="space-y-1 text-gray-300">
                     <p><span class="text-[#8b949e]">City:</span> {{ weather.city }}</p>
                     <p><span class="text-[#8b949e]">Temp:</span> {{ weather.temp }}°C</p>
                     <p><span class="text-[#8b949e]">Condition:</span> {{ weather.condition }}</p>
@@ -45,19 +45,19 @@
             </div>
 
             <div class="bg-[#1f2937] border border-blue-500/30 p-6 rounded-lg shadow-xl">
-                <h2 class="text-sm font-bold mb-4 text-yellow-500 uppercase tracking-wider">Smart Advisor</h2>
+                <h2 class="text-sm font-bold mb-4 text-yellow-500 uppercase tracking-wider">Smart Recommendations</h2>
                 <ul class="space-y-3">
                     {% for item in recs %}
                     <li class="flex items-start gap-2 text-gray-100">
-                        <span class="text-yellow-500">✦</span> {{ item }}
-                    </li>
+                        <span class="text-yellow-500">✦</span> 
+                        <span class="leading-snug">{{ item }}</span> </li>
                     {% endfor %}
                 </ul>
             </div>
         </div>
 
-        <div class="mt-8 flex flex-col md:flex-row gap-4">
-            <a href="/" class="text-center bg-[#21262d] border border-[#30363d] px-8 py-3 rounded hover:bg-[#30363d] transition">
+        <div class="mt-8">
+            <a href="/" class="inline-block w-full md:w-auto text-center bg-[#21262d] border border-[#30363d] px-8 py-3 rounded hover:bg-[#30363d] transition">
                 Return to Live Camera
             </a>
         </div>
