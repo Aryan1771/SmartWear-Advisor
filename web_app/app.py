@@ -113,7 +113,10 @@ def detail(name):
     lat = request.args.get('lat')
     lon = request.args.get('lon')
     city = request.args.get('city', 'Delhi')
+    mask_status = request.args.get('mask', 'No Mask')
+    glasses_status = request.args.get('glasses', 'No Glasses')
     
+    acc = {"mask": mask_status, "glasses": glasses_status}
     loc_query = f"{lat},{lon}" if lat and lat != "null" else city
     weather = get_weather(loc_query)
     profile = registry.user_profiles.get(name, {"notes": "Guest"})
@@ -122,14 +125,8 @@ def detail(name):
     # We default to standard recommendations or can pass last known acc from frontend
     recs = generate_recommendation(weather, False, False)
     
-    return render_template(
-        'detail.html', 
-        name=name, 
-        profile=profile, 
-        weather=weather, 
-        recs=recs, 
-        acc={"mask": "N/A", "glasses": "N/A"}
-    )
+    return render_template('detail.html', name=name, profile=profile, 
+                           weather=weather, recs=recs, acc=acc)
 
 if __name__ == '__main__':
     # No internal ngrok, handled by Colab Cell
