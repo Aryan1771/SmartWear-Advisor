@@ -12,10 +12,12 @@
         
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div class="lg:col-span-2 bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden relative">
-                <div class="relative aspect-video bg-black flex items-center justify-center">
-                    <video id="webcam" autoplay playsinline class="w-full h-full object-cover"></video>
-                    <canvas id="canvas" class="hidden"></canvas>
-                    <div id="offline-ui" class="absolute inset-0 bg-black/70 flex items-center justify-center">
+                <div class="relative aspect-video bg-black">
+                    <video id="webcam" autoplay playsinline class="absolute inset-0 w-full h-full object-cover"></video>
+                    <canvas id="overlay" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
+                    
+                    <canvas id="hidden-canvas" class="hidden"></canvas>
+                    <div id="offline-ui" class="absolute inset-0 bg-black/70 flex items-center justify-center z-20">
                         <p class="text-gray-400">Camera Paused</p>
                     </div>
                 </div>
@@ -29,17 +31,17 @@
 
             <div class="space-y-4">
                 <div class="bg-[#161b22] border border-[#30363d] p-4 rounded-lg shadow-sm">
-                    <h2 class="font-bold mb-4">Controls</h2>
+                    <h2 class="font-bold mb-4 text-gray-300">Controls</h2>
                     <input type="text" id="city" value="Ghaziabad" class="w-full bg-[#0d1117] border border-[#30363d] p-2 rounded mb-4 outline-none focus:border-blue-500">
                     <div class="grid grid-cols-2 gap-2">
-                        <button onclick="startApp()" class="bg-[#238636] hover:bg-[#2ea043] py-2 rounded font-bold transition">Start</button>
-                        <button onclick="stopApp()" class="bg-[#da3633] hover:bg-[#f85149] py-2 rounded font-bold transition">Stop</button>
+                        <button onclick="startApp()" class="bg-[#238636] hover:bg-[#2ea043] py-2 rounded font-bold transition">Start Camera</button>
+                        <button onclick="stopApp()" class="bg-[#da3633] hover:bg-[#f85149] py-2 rounded font-bold transition">Stop Camera</button>
                     </div>
                     <button onclick="registerFace()" class="w-full border border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white py-2 rounded font-bold mt-2 transition">Register Profile</button>
                 </div>
                 <div class="bg-[#1f2937] p-4 rounded-lg border border-[#30363d]">
-                    <p class="text-[10px] text-gray-400 font-bold tracking-widest uppercase">Identity Found</p>
-                    <p id="name-display" class="text-xl mt-1 text-blue-200">Scanning...</p>
+                    <p class="text-[10px] text-gray-400 font-bold tracking-widest uppercase">Identity Status</p>
+                    <p id="name-display" class="text-xl mt-1 text-blue-200 italic">Scanning...</p>
                 </div>
             </div>
         </div>
@@ -47,11 +49,14 @@
 
     <script>
         const video = document.getElementById('webcam');
-        const canvas = document.getElementById('canvas');
+        const overlay = document.getElementById('overlay');
+        const hiddenCanvas = document.getElementById('hidden-canvas');
+        const h_ctx = hiddenCanvas.getContext('2d');
+        const o_ctx = overlay.getContext('2d');
         let userCoords = { lat: null, lon: null };
         let active = false;
 
-        // Get Location
+        // Auto-GPS fix
         navigator.geolocation.getCurrentPosition(p => {
             userCoords = { lat: p.coords.latitude, lon: p.coords.longitude };
             document.getElementById('location-msg').innerText = "GPS Fixed";
@@ -68,7 +73,7 @@
                 document.getElementById('pulse').classList.add('animate-pulse');
                 active = true;
                 processLoop();
-            } catch (err) { alert("Camera Error: Allow browser access."); }
+            } catch (err) { alert("Camera Access Denied."); }
         }
 
         function stopApp() {
@@ -77,55 +82,56 @@
             document.getElementById('offline-ui').classList.remove('hidden');
             document.getElementById('pulse').classList.remove('animate-pulse');
             document.getElementById('pulse').classList.replace('bg-green-500', 'bg-gray-500');
+            o_ctx.clearRect(0, 0, overlay.width, overlay.height);
         }
 
         async function processLoop() {
-    if (!active) return;
+            if (!active) return;
+            if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+                setTimeout(processLoop, 100);
+                return;
+            }
 
-    // MOBILE FIX: Check if video is actually ready
-    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
-        setTimeout(processLoop, 500); // Wait 0.5s and try again
-        return;
-    }
+            // Sync canvas sizes
+            overlay.width = hiddenCanvas.width = video.videoWidth;
+            overlay.height = hiddenCanvas.height = video.videoHeight;
+            h_ctx.drawImage(video, 0, 0);
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
+            const frame = hiddenCanvas.toDataURL('image/jpeg', 0.7);
 
-    const frame = canvas.toDataURL('image/jpeg', 0.5);
+            try {
+                const res = await fetch('/process_remote_frame', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: frame })
+                });
+                const data = await res.json();
 
-    try {
-        const response = await fetch('/process_remote_frame', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: frame })
-        });
+                // Clear and Draw Bounding Box
+                o_ctx.clearRect(0, 0, overlay.width, overlay.height);
+                if (data.box) {
+                    const [top, right, bottom, left] = data.box;
+                    o_ctx.strokeStyle = data.name !== "Unknown" ? "#4ade80" : "#facc15";
+                    o_ctx.lineWidth = 2;
+                    o_ctx.strokeRect(left, top, right - left, bottom - top);
+                }
 
-        const data = await response.json();
-        
-        // If server says frame was empty, just loop back
-        if (data.status === "empty_frame") {
+                if (data.name && data.name !== "Unknown") {
+                    const city = document.getElementById('city').value;
+                    const url = `/detail/${data.name}?lat=${userCoords.lat}&lon=${userCoords.lon}&city=${city}&mask=${data.mask}&glasses=${data.glasses}`;
+                    window.location.href = url;
+                    return;
+                }
+            } catch (e) { console.log("Connection lag..."); }
+
             setTimeout(processLoop, 500);
-            return;
         }
 
-        if (data.name && data.name !== "Unknown") {
-            // Success logic...
-            const cityVal = document.getElementById('city').value;
-            window.location.href = `/detail/${data.name}?lat=${userCoords.lat}&lon=${userCoords.lon}&city=${cityVal}&mask=${data.mask || 'No Mask'}&glasses=${data.glasses || 'No Glasses'}`;
-            return; 
-        }
-    } catch (err) {
-        console.error("Link error");
-    }
-
-    setTimeout(processLoop, 1000); // Standard heartbeat
-}
         async function registerFace() {
-            const name = prompt("Enter Name:");
+            const name = prompt("Enter User Name:");
             if(!name) return;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            const frame = canvas.toDataURL('image/jpeg', 0.8);
+            h_ctx.drawImage(video, 0, 0);
+            const frame = hiddenCanvas.toDataURL('image/jpeg', 0.8);
             const res = await fetch('/register_remote', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
