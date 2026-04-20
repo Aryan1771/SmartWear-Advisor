@@ -1,44 +1,68 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SmartWear Advisor</title>
+    <title>SmartWear Advisor | Remote Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#0d1117] text-[#f0f6fc] p-8">
     <div class="max-w-6xl mx-auto">
-        <h1 class="text-3xl font-bold mb-2">SmartWear Advisor</h1>
+        <h1 class="text-3xl font-bold mb-2">SmartWear Advisor <span class="text-sm font-normal text-blue-500 underline">Colab Remote</span></h1>
+        
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="lg:col-span-2 bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
+            <div class="lg:col-span-2 bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden relative">
                 <div class="relative w-full aspect-video bg-black flex items-center justify-center">
-                    <img id="video-feed" src="" class="w-full h-full object-cover">
-                    <div id="offline-ui" class="absolute text-center text-[#8b949e]">
-                        <p class="text-xl">Camera Offline</p>
+                    <video id="webcam" autoplay playsinline class="w-full h-full object-cover"></video>
+                    
+                    <canvas id="capture-canvas" class="hidden"></canvas>
+                    
+                    <div id="offline-ui" class="absolute inset-0 flex items-center justify-center bg-black/70 transition-opacity">
+                        <p class="text-xl text-[#8b949e]">Camera Paused</p>
                     </div>
                 </div>
-                <div class="p-4 border-t border-[#30363d] flex justify-between text-sm">
-                    <span id="status-msg">Standby</span>
-                    <span id="location-msg" class="text-blue-400">GPS Locating...</span>
+                
+                <div class="p-4 border-t border-[#30363d] flex justify-between text-sm bg-[#0d1117]">
+                    <span id="status-msg" class="flex items-center gap-2">
+                        <span id="pulse" class="w-2 h-2 rounded-full bg-gray-500"></span> 
+                        <span id="status-text">Ready</span>
+                    </span>
+                    <span id="location-msg" class="text-blue-400 font-mono">GPS Locating...</span>
                 </div>
             </div>
+
             <div class="space-y-4">
                 <div class="bg-[#161b22] border border-[#30363d] p-4 rounded-lg">
-                    <h2 class="font-bold mb-4">Controls</h2>
-                    <input type="text" id="city" value="Delhi" class="w-full bg-[#0d1117] border border-[#30363d] p-2 rounded mb-4">
+                    <h2 class="font-bold mb-4">Remote Controls</h2>
+                    
+                    <label class="text-[10px] text-gray-500 font-bold uppercase">Target City</label>
+                    <input type="text" id="city" value="Noida" class="w-full bg-[#0d1117] border border-[#30363d] p-2 rounded mb-4 focus:border-blue-500 outline-none">
+                    
                     <div class="grid grid-cols-2 gap-2">
-                        <button onclick="startCamera()" class="bg-[#238636] py-2 rounded font-bold">Start</button>
-                        <button onclick="stopCamera()" class="bg-[#da3633] py-2 rounded font-bold">Stop</button>
+                        <button onclick="startRemoteSession()" class="bg-[#238636] hover:bg-[#2ea043] py-2 rounded font-bold transition">Start AI</button>
+                        <button onclick="stopRemoteSession()" class="bg-[#da3633] hover:bg-[#f85149] py-2 rounded font-bold transition">Stop</button>
                     </div>
-                    <button onclick="registerFace()" class="w-full bg-[#388bfd] py-2 rounded font-bold mt-2">Register Face</button>
+                    
+                    <button onclick="registerFaceRemote()" class="w-full border border-[#388bfd] text-[#388bfd] hover:bg-[#388bfd] hover:text-white py-2 rounded font-bold mt-2 transition">
+                        Register New Profile
+                    </button>
                 </div>
-                <div class="bg-[#1f2937] p-4 rounded-lg border border-[#30363d]">
-                    <p class="text-xs text-[#8b949e] font-bold">RECOGNITION</p>
-                    <p id="name-display" class="text-lg">Waiting...</p>
+
+                <div class="bg-[#1f2937] p-4 rounded-lg border border-[#30363d] shadow-xl">
+                    <p class="text-xs text-[#8b949e] font-bold tracking-widest">LIVE IDENTITY</p>
+                    <p id="name-display" class="text-2xl font-light mt-1 text-blue-100">Scanning Environment...</p>
                 </div>
             </div>
         </div>
     </div>
+
     <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('capture-canvas');
+        const ctx = canvas.getContext('2d');
+        
         let userCoords = { lat: null, lon: null };
+        let isProcessing = false;
+
+        // Initialize GPS
         window.onload = () => {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(p => {
@@ -47,35 +71,95 @@
                 });
             }
         };
-        function startCamera() {
-            document.getElementById('video-feed').src = "/video_feed";
-            document.getElementById('offline-ui').classList.add('hidden');
-            document.getElementById('status-msg').innerText = "Streaming...";
-        }
-        async function stopCamera() {
-            document.getElementById('video-feed').src = "";
-            document.getElementById('offline-ui').classList.remove('hidden');
-            await fetch('/stop_camera', { method: 'POST' });
-        }
-        function registerFace() {
-            const name = prompt("Enter Name:");
-            if(name) fetch('/register', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name: name })
-            }).then(r => r.json()).then(d => alert(d.message));
-        }
-        setInterval(() => {
-            if (document.getElementById('video-feed').src.includes("video_feed")) {
-                fetch('/get_status').then(r => r.json()).then(data => {
-                    if(data.name && data.name !== "Unknown" && data.name !== "None") {
-                        document.getElementById('name-display').innerText = data.name;
-                        let url = `/detail/${data.name}?lat=${userCoords.lat}&lon=${userCoords.lon}&city=${document.getElementById('city').value}`;
-                        setTimeout(() => window.location.href = url, 2000);
-                    }
+
+        // 1. Start Camera & AI Loop
+        async function startRemoteSession() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480, frameRate: 15 } 
                 });
+                video.srcObject = stream;
+                document.getElementById('offline-ui').classList.add('hidden');
+                document.getElementById('pulse').classList.replace('bg-gray-500', 'bg-green-500');
+                document.getElementById('pulse').classList.add('animate-pulse');
+                document.getElementById('status-text').innerText = "AI Processing Active";
+                
+                isProcessing = true;
+                processFrame(); // Start the bridge to Colab
+            } catch (err) {
+                alert("Camera access denied or not found.");
             }
-        }, 3000);
+        }
+
+        // 2. Stop Session
+        function stopRemoteSession() {
+            isProcessing = false;
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+            document.getElementById('offline-ui').classList.remove('hidden');
+            document.getElementById('pulse').classList.remove('animate-pulse');
+            document.getElementById('pulse').classList.replace('bg-green-500', 'bg-gray-500');
+            document.getElementById('status-text').innerText = "Session Paused";
+        }
+
+        // 3. The Bridge: Sends frame to Google Colab server
+        async function processFrame() {
+            if (!isProcessing) return;
+
+            // Draw current video frame to canvas
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+
+            // Convert to Base64 (JPEG at 0.5 quality saves huge bandwidth)
+            const base64Image = canvas.toDataURL('image/jpeg', 0.5);
+
+            try {
+                const response = await fetch('/process_remote_frame', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: base64Image })
+                });
+
+                const data = await response.json();
+
+                if (data.name && data.name !== "Unknown") {
+                    document.getElementById('name-display').innerText = data.name;
+                    document.getElementById('name-display').classList.add('text-green-400');
+                    
+                    // Trigger navigation to details
+                    const cityVal = document.getElementById('city').value;
+                    setTimeout(() => {
+                        window.location.href = `/detail/${data.name}?lat=${userCoords.lat}&lon=${userCoords.lon}&city=${cityVal}`;
+                    }, 1500);
+                    return; // Stop processing loop on success
+                }
+            } catch (err) {
+                console.error("Communication error with Colab:", err);
+            }
+
+            // Loop every 800ms to avoid overwhelming the Ngrok tunnel
+            setTimeout(processFrame, 800);
+        }
+
+        async function registerFaceRemote() {
+            const name = prompt("Enter Identity Name:");
+            if (!name) return;
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            const base64Image = canvas.toDataURL('image/jpeg', 0.8);
+
+            const res = await fetch('/register_remote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, image: base64Image })
+            });
+            const d = await res.json();
+            alert(d.message);
+        }
     </script>
 </body>
 </html>
