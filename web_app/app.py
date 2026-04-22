@@ -5,52 +5,43 @@
 
 import os, io, csv
 import requests
+import base64
 from flask import (
     Flask, render_template, request, jsonify,
     session, redirect, url_for, Response, flash,
 )
-from pathlib import Path
 from datetime import datetime
 from functools import wraps
-
-from backend.db import (
-    init_db, add_user_to_db, delete_user_from_db,
-    log_detection, log_audit,
-    get_all_users, get_detection_history, get_audit_log,
-)
-from backend.weather_api import get_weather, get_hourly_forecast, uv_category
-from backend.recommendation_engine import generate_recommendation
+from backend.db import init_db, add_user_to_db, log_audit
 from keepalive import start_keepalive
 
-# ── App setup ────────────────────────────────────────────────────
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "smartwear-change-this-in-prod")
+app.secret_key = os.getenv("SECRET_KEY", "smartwear-secure-key")
 
-HF_SPACE_URL   = os.getenv("HF_SPACE_URL", "http://localhost:8000").rstrip("/")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
-SESSION_TIMEOUT = 1800  # seconds (30 min)
+# Configuration
+HF_SPACE_URL = os.getenv("HF_SPACE_URL", "").rstrip("/")
+HF_TOKEN = os.getenv("HF_TOKEN") # Your hf_... token
 
-# Initialise database tables on startup
 init_db()
-
-# Start HuggingFace Space keepalive background thread
 start_keepalive()
 
 
 # ── Helpers ───────────────────────────────────────────────────────
 
 def _hf(endpoint: str, payload: dict):
-    """POST to HuggingFace Space and return parsed JSON, or None on error."""
+    """Authenticated proxy to the Private Hugging Face Space."""
     try:
+        headers = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
         r = requests.post(
             f"{HF_SPACE_URL}{endpoint}",
             json=payload,
+            headers=headers,
             timeout=35,
         )
         r.raise_for_status()
         return r.json()
     except Exception as e:
-        print(f"[HF] {endpoint} error: {e}")
+        print(f"[HF Proxy Error] {endpoint}: {e}")
         return None
 
 
@@ -81,22 +72,14 @@ def _is_admin():
 
 @app.route("/")
 def index():
-    return render_template("index.html", admin_logged_in=_is_admin())
+    return render_template("index.html", admin_logged_in=bool(session.get("admin")))
 
 
 @app.route("/process_remote_frame", methods=["POST"])
 def process_remote_frame():
-    """Proxy camera frame to HF Space for face detection and accessory analysis."""
-    data  = request.json or {}
-    image = data.get("image", "")
-    if not image:
-        return jsonify({"name": "Unknown", "box": None})
-
-    result = _hf("/detect", {"image": image})
-    if not result:
-        return jsonify({"name": "Unknown", "box": None,
-                        "error": "Inference server unavailable"})
-    return jsonify(result)
+    data = request.json or {}
+    result = _hf("/detect", {"image": data.get("image", "")})
+    return jsonify(result if result else {"name": "Unknown", "box": None})
 
 
 @app.route("/register_remote", methods=["POST"])
@@ -112,15 +95,10 @@ def register_remote():
         return jsonify({"success": False, "message": "No image received."})
 
     result = _hf("/register", {"image": image, "name": name})
-    if result is None:
-        return jsonify({"success": False,
-                        "message": "Could not reach inference server. Try again."})
-
-    if result.get("success"):
+    if result and result.get("success"):
         add_user_to_db(name)
         log_audit("REGISTRATION", f"User '{name}' registered", request.remote_addr)
-
-    return jsonify(result)
+    return jsonify(result if result else {"success": False, "message": "Backend Unreachable"})
 
 
 @app.route("/detail/<name>")
