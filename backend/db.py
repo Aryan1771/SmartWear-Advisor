@@ -8,6 +8,8 @@ import requests
 from datetime import datetime
 
 TURSO_URL   = os.getenv("TURSO_URL", "")
+if TURSO_URL.startswith("libsql://"):
+    TURSO_URL = TURSO_URL.replace("libsql://", "https://", 1)
 TURSO_TOKEN = os.getenv("TURSO_TOKEN", "")
 
 # ── In-memory fallback for local dev ────────────────────────────
