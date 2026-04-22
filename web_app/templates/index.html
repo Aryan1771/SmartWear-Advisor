@@ -1,145 +1,512 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SmartWear Advisor | Remote</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#238636">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>SmartWear Advisor</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- MediaPipe Face Mesh for blink/liveness detection -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"
+          crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
+          crossorigin="anonymous"></script>
 </head>
-<body class="bg-[#0d1117] text-[#f0f6fc] p-4 md:p-8">
-    <div class="max-w-6xl mx-auto">
-        <h1 class="text-2xl md:text-3xl font-bold mb-4">SmartWear Advisor <span class="text-sm font-normal text-blue-500 underline">Remote</span></h1>
-        
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="lg:col-span-2 bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden relative">
-                <div class="relative aspect-video bg-black">
-                    <video id="webcam" autoplay playsinline class="absolute inset-0 w-full h-full object-cover"></video>
-                    <canvas id="overlay" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
-                    
-                    <canvas id="hidden-canvas" class="hidden"></canvas>
-                    <div id="offline-ui" class="absolute inset-0 bg-black/70 flex items-center justify-center z-20">
-                        <p class="text-gray-400">Camera Paused</p>
-                    </div>
-                </div>
-                <div class="p-4 flex justify-between text-xs md:text-sm bg-[#0d1117]">
-                    <span id="status-text" class="flex items-center gap-2">
-                        <span id="pulse" class="w-2 h-2 rounded-full bg-gray-500"></span> Ready
-                    </span>
-                    <span id="location-msg" class="text-blue-400 font-mono">GPS Locating...</span>
-                </div>
-            </div>
 
-            <div class="space-y-4">
-                <div class="bg-[#161b22] border border-[#30363d] p-4 rounded-lg shadow-sm">
-                    <h2 class="font-bold mb-4 text-gray-300">Controls</h2>
-                    <input type="text" id="city" value="Ghaziabad" class="w-full bg-[#0d1117] border border-[#30363d] p-2 rounded mb-4 outline-none focus:border-blue-500">
-                    <div class="grid grid-cols-2 gap-2">
-                        <button onclick="startApp()" class="bg-[#238636] hover:bg-[#2ea043] py-2 rounded font-bold transition">Start Camera</button>
-                        <button onclick="stopApp()" class="bg-[#da3633] hover:bg-[#f85149] py-2 rounded font-bold transition">Stop Camera</button>
-                    </div>
-                    <button onclick="registerFace()" class="w-full border border-blue-500 text-blue-500 hover:bg-blue-500 hover:text-white py-2 rounded font-bold mt-2 transition">Register Profile</button>
-                </div>
-                <div class="bg-[#1f2937] p-4 rounded-lg border border-[#30363d]">
-                    <p class="text-[10px] text-gray-400 font-bold tracking-widest uppercase">Identity Status</p>
-                    <p id="name-display" class="text-xl mt-1 text-blue-200 italic">Scanning...</p>
-                </div>
-            </div>
+<body>
+
+<!-- ══════════════════ SIDEBAR ══════════════════ -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <span class="sidebar-logo">SmartWear</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode" id="theme-btn">🌙</button>
+  </div>
+
+  <div class="sidebar-nav">
+    <span class="sidebar-section-label">Navigation</span>
+
+    <a href="/" class="sidebar-item active">
+      <span class="icon">🏠</span> Home
+    </a>
+
+    {% if admin_logged_in %}
+    <!-- Admin-only items -->
+    <span class="sidebar-section-label" style="margin-top:8px;">Admin</span>
+
+    <a href="/admin/dashboard" class="sidebar-item">
+      <span class="icon">📊</span> Dashboard
+    </a>
+
+    <a href="/admin/dashboard#users" class="sidebar-item">
+      <span class="icon">👥</span> Registered Faces
+    </a>
+
+    <a href="/admin/dashboard#history" class="sidebar-item">
+      <span class="icon">🕒</span> Detection History
+    </a>
+
+    <a href="/admin/export_csv" class="sidebar-item">
+      <span class="icon">📥</span> Export CSV
+    </a>
+
+    <div class="sidebar-divider"></div>
+
+    <a href="/admin/logout" class="sidebar-item" style="color:var(--text-danger)">
+      <span class="icon">🔓</span> Logout
+    </a>
+    {% else %}
+    <div class="sidebar-divider"></div>
+    <a href="/admin/login" class="sidebar-item">
+      <span class="icon">🔐</span> Admin Login
+    </a>
+    {% endif %}
+  </div>
+
+  <div class="sidebar-footer">
+    <span style="font-size:11px; color:var(--text-secondary);">SmartWear Advisor v2.0</span>
+  </div>
+</nav>
+
+<!-- ══════════════════ HAMBURGER ══════════════════ -->
+<button class="hamburger" id="hamburger" onclick="toggleSidebar()" title="Toggle menu">☰</button>
+
+<!-- ══════════════════ MAIN CONTENT ══════════════════ -->
+<div class="main-content" id="main-content">
+
+  <!-- Flash messages (from Flask session) -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat, msg in messages %}
+        <div class="flash-msg flash-{{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="top-bar">
+    <h1>SmartWear Advisor
+      <span style="font-size:12px; font-weight:400; color:var(--text-info); margin-left:8px;">Remote</span>
+    </h1>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <!-- PWA install button (shown by JS when installable) -->
+      <button id="pwa-install-btn" class="btn btn-primary" style="display:none; font-size:12px;"
+              onclick="installPWA()">📲 Install App</button>
+    </div>
+  </div>
+
+  <!-- ── Main grid ───────────────────────────────────────── -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+    <!-- Camera panel -->
+    <div class="lg:col-span-2 panel">
+      <div class="relative" style="aspect-ratio:16/9; background:#000;">
+        <video id="webcam" autoplay playsinline
+               style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;"></video>
+        <canvas id="overlay"
+                style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></canvas>
+        <canvas id="hidden-canvas" style="display:none;"></canvas>
+
+        <!-- Offline placeholder -->
+        <div id="offline-ui"
+             style="position:absolute; inset:0; background:rgba(0,0,0,0.75);
+                    display:flex; align-items:center; justify-content:center; z-index:20;">
+          <p style="color:var(--text-secondary);">Camera Paused</p>
         </div>
+
+        <!-- Liveness challenge overlay -->
+        <div id="liveness-overlay" class="liveness-overlay" style="display:none;">
+          <div class="liveness-ring" id="liveness-ring"></div>
+          <p id="liveness-msg" style="color:#f0f6fc; font-size:15px; font-weight:600;">
+            Please blink once to verify
+          </p>
+          <p style="color:#8b949e; font-size:12px; margin-top:6px;">
+            Anti-spoofing check
+          </p>
+          <button onclick="cancelLiveness()"
+                  style="margin-top:16px; background:transparent; border:1px solid #30363d;
+                         color:#8b949e; border-radius:6px; padding:6px 16px; cursor:pointer;">
+            Cancel
+          </button>
+        </div>
+      </div>
+
+      <!-- Status bar -->
+      <div style="padding:10px 16px; display:flex; justify-content:space-between;
+                  align-items:center; font-size:13px; background:var(--bg-primary);
+                  border-top:1px solid var(--border);">
+        <span style="display:flex; align-items:center; gap:8px;">
+          <span class="pulse-dot" id="pulse"></span>
+          <span id="status-text">Ready</span>
+        </span>
+        <span id="location-msg" style="color:var(--text-info); font-family:monospace;">
+          GPS Locating...
+        </span>
+      </div>
     </div>
 
-    <script>
-        const video = document.getElementById('webcam');
-        const overlay = document.getElementById('overlay');
-        const hiddenCanvas = document.getElementById('hidden-canvas');
-        const h_ctx = hiddenCanvas.getContext('2d');
-        const o_ctx = overlay.getContext('2d');
-        let userCoords = { lat: null, lon: null };
-        let active = false;
+    <!-- Controls panel -->
+    <div style="display:flex; flex-direction:column; gap:16px;">
 
-        // Auto-GPS fix
-        navigator.geolocation.getCurrentPosition(p => {
-            userCoords = { lat: p.coords.latitude, lon: p.coords.longitude };
-            document.getElementById('location-msg').innerText = "GPS Fixed";
-        }, () => { document.getElementById('location-msg').innerText = "GPS Error"; });
+      <!-- Controls card -->
+      <div class="card">
+        <h2 style="font-weight:700; font-size:14px; margin-bottom:14px; color:var(--text-primary);">
+          Controls
+        </h2>
+        <label style="font-size:12px; color:var(--text-secondary); margin-bottom:4px; display:block;">
+          City / Location
+        </label>
+        <input type="text" id="city" value="Ghaziabad" class="input-field" style="margin-bottom:12px;">
 
-        async function startApp() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user", width: { ideal: 640 } } 
-                });
-                video.srcObject = stream;
-                document.getElementById('offline-ui').classList.add('hidden');
-                document.getElementById('pulse').classList.replace('bg-gray-500', 'bg-green-500');
-                document.getElementById('pulse').classList.add('animate-pulse');
-                active = true;
-                processLoop();
-            } catch (err) { alert("Camera Access Denied."); }
-        }
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+          <button onclick="startApp()" class="btn btn-success">▶ Start</button>
+          <button onclick="stopApp()"  class="btn btn-danger">■ Stop</button>
+        </div>
+        <button onclick="beginRegistration()"
+                class="btn btn-outline-info" style="width:100%;">
+          👤 Register Profile
+        </button>
+      </div>
 
-        function stopApp() {
-            active = false;
-            if(video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
-            document.getElementById('offline-ui').classList.remove('hidden');
-            document.getElementById('pulse').classList.remove('animate-pulse');
-            document.getElementById('pulse').classList.replace('bg-green-500', 'bg-gray-500');
-            o_ctx.clearRect(0, 0, overlay.width, overlay.height);
-        }
+      <!-- Identity status card -->
+      <div class="card" style="background:var(--bg-card); border-color: rgba(88,166,255,0.3);">
+        <p style="font-size:10px; font-weight:700; letter-spacing:0.1em;
+                  text-transform:uppercase; color:var(--text-secondary);">
+          Identity Status
+        </p>
+        <p id="name-display" style="font-size:22px; margin-top:6px;
+                                    color:var(--text-info); font-style:italic;">
+          Scanning...
+        </p>
+        <p style="font-size:10px; font-weight:700; letter-spacing:0.1em;
+                  text-transform:uppercase; color:var(--text-secondary); margin-top:14px;">
+          Accessory Detected
+        </p>
+        <p id="acc-display" style="font-size:13px; margin-top:4px; color:var(--text-secondary);">
+          —
+        </p>
+      </div>
 
-        async function processLoop() {
-            if (!active) return;
-            if (video.readyState !== video.HAVE_ENOUGH_DATA) {
-                setTimeout(processLoop, 100);
-                return;
-            }
+    </div>
+  </div>
+  <!-- /grid -->
 
-            // Sync canvas sizes
-            overlay.width = hiddenCanvas.width = video.videoWidth;
-            overlay.height = hiddenCanvas.height = video.videoHeight;
-            h_ctx.drawImage(video, 0, 0);
+</div>
+<!-- /main-content -->
 
-            const frame = hiddenCanvas.toDataURL('image/jpeg', 0.7);
+<!-- ══════════════════ SCRIPTS ══════════════════ -->
+<script>
+// ── DOM refs ──────────────────────────────────────────────────────
+const video       = document.getElementById('webcam');
+const overlay     = document.getElementById('overlay');
+const hiddenCanvas= document.getElementById('hidden-canvas');
+const h_ctx       = hiddenCanvas.getContext('2d');
+const o_ctx       = overlay.getContext('2d');
+const nameDisplay = document.getElementById('name-display');
+const accDisplay  = document.getElementById('acc-display');
 
-            try {
-                const res = await fetch('/process_remote_frame', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: frame })
-                });
-                const data = await res.json();
+// ── State ─────────────────────────────────────────────────────────
+let userCoords     = { lat: null, lon: null };
+let active         = false;
+let livenessActive = false;
+let blinkDetected  = false;
+let pendingRegName = null;
+let faceMesh       = null;
+let blinkFrames    = 0;
+let prevEAR        = 1.0;
+let deferredPrompt = null;  // PWA install
 
-                // Clear and Draw Bounding Box
-                o_ctx.clearRect(0, 0, overlay.width, overlay.height);
-                if (data.box) {
-                    const [top, right, bottom, left] = data.box;
-                    o_ctx.strokeStyle = data.name !== "Unknown" ? "#4ade80" : "#facc15";
-                    o_ctx.lineWidth = 2;
-                    o_ctx.strokeRect(left, top, right - left, bottom - top);
-                }
+// ── PWA install ───────────────────────────────────────────────────
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('pwa-install-btn').style.display = 'flex';
+});
 
-                if (data.name && data.name !== "Unknown") {
-                    const city = document.getElementById('city').value;
-                    const url = `/detail/${data.name}?lat=${userCoords.lat}&lon=${userCoords.lon}&city=${city}&mask=${data.mask}&glasses=${data.glasses}`;
-                    window.location.href = url;
-                    return;
-                }
-            } catch (e) { console.log("Connection lag..."); }
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => {
+    deferredPrompt = null;
+    document.getElementById('pwa-install-btn').style.display = 'none';
+  });
+}
 
-            setTimeout(processLoop, 500);
-        }
+// Service worker registration
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/js/sw.js').catch(console.warn);
+}
 
-        async function registerFace() {
-            const name = prompt("Enter User Name:");
-            if(!name) return;
-            h_ctx.drawImage(video, 0, 0);
-            const frame = hiddenCanvas.toDataURL('image/jpeg', 0.8);
-            const res = await fetch('/register_remote', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name: name, image: frame })
-            });
-            const d = await res.json();
-            alert(d.message);
-        }
-    </script>
+// ── Dark / Light theme ────────────────────────────────────────────
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('theme-btn').textContent = theme === 'dark' ? '🌙' : '☀️';
+}
+function toggleTheme() {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('sw-theme', next);
+  applyTheme(next);
+}
+applyTheme(localStorage.getItem('sw-theme') || 'dark');
+
+// ── Sidebar ───────────────────────────────────────────────────────
+let sidebarOpen = window.innerWidth >= 768;
+function toggleSidebar() { sidebarOpen ? closeSidebar() : openSidebar(); }
+function openSidebar() {
+  sidebarOpen = true;
+  document.getElementById('sidebar').classList.remove('collapsed');
+  document.getElementById('sidebar').classList.add('mobile-open');
+  document.getElementById('sidebar-overlay').classList.add('visible');
+  if (window.innerWidth >= 768)
+    document.getElementById('main-content').classList.remove('sidebar-collapsed');
+}
+function closeSidebar() {
+  sidebarOpen = false;
+  document.getElementById('sidebar').classList.add('collapsed');
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebar-overlay').classList.remove('visible');
+  document.getElementById('main-content').classList.add('sidebar-collapsed');
+}
+// On desktop, keep sidebar open by default
+if (window.innerWidth < 768) closeSidebar();
+else document.getElementById('main-content').style.marginLeft = 'var(--sidebar-width)';
+
+// ── GPS ───────────────────────────────────────────────────────────
+navigator.geolocation.getCurrentPosition(
+  p => {
+    userCoords = { lat: p.coords.latitude, lon: p.coords.longitude };
+    document.getElementById('location-msg').textContent = 'GPS Fixed';
+  },
+  () => { document.getElementById('location-msg').textContent = 'GPS Error – using city'; }
+);
+
+// ── Camera ────────────────────────────────────────────────────────
+async function startApp() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    video.srcObject = stream;
+    document.getElementById('offline-ui').style.display = 'none';
+    const pulse = document.getElementById('pulse');
+    pulse.classList.add('active');
+    document.getElementById('status-text').textContent = 'Live';
+    active = true;
+    processLoop();
+  } catch (err) {
+    alert('Camera access denied. Please allow camera access and try again.');
+  }
+}
+
+function stopApp() {
+  active = false;
+  if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
+  document.getElementById('offline-ui').style.display = 'flex';
+  document.getElementById('pulse').classList.remove('active');
+  document.getElementById('status-text').textContent = 'Paused';
+  o_ctx.clearRect(0, 0, overlay.width, overlay.height);
+  nameDisplay.textContent = 'Scanning...';
+  accDisplay.textContent  = '—';
+}
+
+// ── Processing loop ───────────────────────────────────────────────
+async function processLoop() {
+  if (!active) return;
+  if (video.readyState < video.HAVE_ENOUGH_DATA) {
+    setTimeout(processLoop, 150);
+    return;
+  }
+
+  // Sync canvas sizes to actual video dimensions
+  overlay.width = hiddenCanvas.width = video.videoWidth;
+  overlay.height = hiddenCanvas.height = video.videoHeight;
+  h_ctx.drawImage(video, 0, 0);
+  const frame = hiddenCanvas.toDataURL('image/jpeg', 0.7);
+
+  try {
+    const res  = await fetch('/process_remote_frame', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ image: frame }),
+    });
+    const data = await res.json();
+
+    // ── Draw bounding box ──────────────────────────────────────
+    o_ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+    if (data.box) {
+      const [top, right, bottom, left] = data.box;
+      const isKnown = data.name && data.name !== 'Unknown';
+
+      // Bounding box colour: green = known, yellow = unknown
+      o_ctx.strokeStyle = isKnown ? '#4ade80' : '#facc15';
+      o_ctx.lineWidth   = 2.5;
+      o_ctx.shadowColor = isKnown ? '#4ade80' : '#facc15';
+      o_ctx.shadowBlur  = 6;
+      o_ctx.strokeRect(left, top, right - left, bottom - top);
+      o_ctx.shadowBlur  = 0;
+
+      // Name label above box
+      const label = isKnown ? data.name : 'Unknown';
+      o_ctx.fillStyle = isKnown ? '#4ade80' : '#facc15';
+      o_ctx.font      = 'bold 14px sans-serif';
+      o_ctx.fillText(label, left, top > 20 ? top - 8 : top + 20);
+    }
+
+    // ── Update UI panels ──────────────────────────────────────
+    if (data.name && data.name !== 'Unknown') {
+      nameDisplay.textContent = data.name;
+      nameDisplay.style.color = '#4ade80';
+      accDisplay.textContent  =
+        `Mask: ${data.mask || '—'}  •  Glasses: ${data.glasses || '—'}`;
+
+      // Navigate to detail page
+      const city = document.getElementById('city').value;
+      const url  = `/detail/${encodeURIComponent(data.name)}` +
+                   `?lat=${userCoords.lat}&lon=${userCoords.lon}` +
+                   `&city=${encodeURIComponent(city)}` +
+                   `&mask=${encodeURIComponent(data.mask || '')}` +
+                   `&glasses=${encodeURIComponent(data.glasses || '')}`;
+      active = false;
+      window.location.href = url;
+      return;
+    } else {
+      nameDisplay.textContent = data.box ? 'Unknown' : 'Scanning...';
+      nameDisplay.style.color = data.box ? '#facc15' : 'var(--text-info)';
+      accDisplay.textContent  = data.box
+        ? `Mask: ${data.mask || '?'}  •  Glasses: ${data.glasses || '?'}`
+        : '—';
+    }
+  } catch (e) {
+    // Silently retry on network blip
+  }
+
+  setTimeout(processLoop, 600);
+}
+
+// ── Liveness / Registration ───────────────────────────────────────
+function beginRegistration() {
+  const name = prompt('Enter the name for this face:');
+  if (!name || !name.trim()) return;
+  pendingRegName = name.trim();
+
+  // Start MediaPipe liveness challenge
+  document.getElementById('liveness-overlay').style.display = 'flex';
+  blinkDetected = false;
+  blinkFrames   = 0;
+  prevEAR       = 1.0;
+  livenessActive = true;
+  startLiveness();
+}
+
+function cancelLiveness() {
+  livenessActive = false;
+  pendingRegName = null;
+  document.getElementById('liveness-overlay').style.display = 'none';
+  if (faceMesh) { faceMesh.close(); faceMesh = null; }
+}
+
+function euclidean(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function calcEAR(lm, indices) {
+  // Indices: [leftCorner, topA, topB, rightCorner, botB, botA]
+  const [p1, p2, p3, p4, p5, p6] = indices.map(i => lm[i]);
+  const v1   = euclidean(p2, p6);
+  const v2   = euclidean(p3, p5);
+  const horiz = euclidean(p1, p4);
+  return (v1 + v2) / (2.0 * horiz);
+}
+
+function startLiveness() {
+  if (!window.FaceMesh) {
+    // MediaPipe not loaded — skip liveness, go straight to capture
+    document.getElementById('liveness-msg').textContent = 'Blink check unavailable — capturing…';
+    setTimeout(captureAndRegister, 1200);
+    return;
+  }
+
+  faceMesh = new FaceMesh({
+    locateFile: f =>
+      `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`,
+  });
+
+  faceMesh.setOptions({
+    maxNumFaces:         1,
+    refineLandmarks:     true,
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence:  0.5,
+  });
+
+  faceMesh.onResults(results => {
+    if (!livenessActive || blinkDetected) return;
+    if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return;
+
+    const lm = results.multiFaceLandmarks[0];
+
+    // Left eye EAR landmarks (MediaPipe face mesh)
+    const leftEAR  = calcEAR(lm, [33, 160, 158, 133, 153, 144]);
+    const rightEAR = calcEAR(lm, [362, 385, 387, 263, 373, 380]);
+    const ear      = (leftEAR + rightEAR) / 2;
+
+    const EAR_BLINK_THRESH = 0.2;
+    const EAR_OPEN_THRESH  = 0.25;
+
+    if (prevEAR > EAR_OPEN_THRESH && ear < EAR_BLINK_THRESH) {
+      blinkFrames++;
+    }
+    if (blinkFrames >= 1 && ear > EAR_OPEN_THRESH && prevEAR < EAR_BLINK_THRESH) {
+      // Blink completed
+      blinkDetected = true;
+      livenessActive = false;
+      faceMesh.close(); faceMesh = null;
+
+      const ring = document.getElementById('liveness-ring');
+      ring.classList.add('success');
+      document.getElementById('liveness-msg').textContent = '✓ Blink confirmed — capturing…';
+      setTimeout(captureAndRegister, 700);
+    }
+    prevEAR = ear;
+  });
+
+  // Feed frames to MediaPipe from the webcam
+  (function sendFrame() {
+    if (!livenessActive || blinkDetected) return;
+    if (video.readyState >= video.HAVE_ENOUGH_DATA) {
+      faceMesh.send({ image: video }).catch(() => {});
+    }
+    requestAnimationFrame(sendFrame);
+  })();
+}
+
+async function captureAndRegister() {
+  // Capture frame
+  hiddenCanvas.width  = video.videoWidth;
+  hiddenCanvas.height = video.videoHeight;
+  h_ctx.drawImage(video, 0, 0);
+  const frame = hiddenCanvas.toDataURL('image/jpeg', 0.9);
+
+  document.getElementById('liveness-overlay').style.display = 'none';
+
+  try {
+    const res  = await fetch('/register_remote', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ name: pendingRegName, image: frame }),
+    });
+    const data = await res.json();
+    alert(data.message || (data.success ? 'Registered!' : 'Registration failed.'));
+  } catch (e) {
+    alert('Registration failed — server error.');
+  }
+  pendingRegName = null;
+}
+</script>
+
 </body>
 </html>

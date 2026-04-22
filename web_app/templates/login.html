@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login | SmartWear Advisor</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body style="display:flex; align-items:center; justify-content:center; min-height:100vh;
+             background:var(--bg-primary);">
+
+<div style="width:100%; max-width:380px; padding:16px;">
+
+  <!-- Logo / heading -->
+  <div style="text-align:center; margin-bottom:28px;">
+    <div style="font-size:36px; margin-bottom:8px;">🔐</div>
+    <h1 style="font-size:20px; font-weight:700; color:var(--text-primary);">Admin Login</h1>
+    <p style="font-size:13px; color:var(--text-secondary); margin-top:4px;">
+      SmartWear Advisor — restricted area
+    </p>
+  </div>
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat, msg in messages %}
+        <div class="flash-msg flash-{{ cat }}" style="margin-bottom:16px;">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <!-- Login form -->
+  <div class="card" style="padding:24px;">
+    <form method="POST" action="/admin/login">
+      <div style="margin-bottom:16px;">
+        <label style="display:block; font-size:13px; font-weight:600;
+                      color:var(--text-secondary); margin-bottom:6px;">
+          Admin Password
+        </label>
+        <input type="password" name="password" autocomplete="current-password"
+               class="input-field" placeholder="Enter admin password"
+               required autofocus>
+      </div>
+      <button type="submit" class="btn btn-success" style="width:100%; padding:10px;">
+        Sign In
+      </button>
+    </form>
+  </div>
+
+  <!-- Back link -->
+  <div style="text-align:center; margin-top:16px;">
+    <a href="/" style="font-size:13px; color:var(--text-secondary); text-decoration:none;">
+      ← Back to SmartWear
+    </a>
+  </div>
+
+  <!-- Theme toggle -->
+  <div style="text-align:center; margin-top:20px;">
+    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">🌙</button>
+  </div>
+</div>
+
+<script>
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = t === 'dark' ? '🌙' : '☀️';
+}
+function toggleTheme() {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('sw-theme', next);
+  applyTheme(next);
+}
+applyTheme(localStorage.getItem('sw-theme') || 'dark');
+</script>
+</body>
+</html>
