@@ -16,4 +16,4 @@ face-recognition-models==0.3.0
 # TFLite runtime (lighter than full TensorFlow — ~50MB vs ~500MB)
 
 # Fallback if tflite-runtime fails on the platform
-# tensorflow-cpu
+tensorflow-cpu
