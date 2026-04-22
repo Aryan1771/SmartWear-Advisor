@@ -314,80 +314,92 @@ function stopApp() {
 }
 
 // ── Processing loop ───────────────────────────────────────────────
+let isProcessing = false;
+const INFERENCE_THROTTLE_MS = 800; 
+
 async function processLoop() {
   if (!active) return;
-  if (video.readyState < video.HAVE_ENOUGH_DATA) {
-    setTimeout(processLoop, 150);
+
+  // Slot-based lock: prevent stacking requests
+  if (isProcessing) {
+    requestAnimationFrame(processLoop);
     return;
   }
 
-  // Sync canvas sizes to actual video dimensions
-  overlay.width = hiddenCanvas.width = video.videoWidth;
-  overlay.height = hiddenCanvas.height = video.videoHeight;
-  h_ctx.drawImage(video, 0, 0);
-  const frame = hiddenCanvas.toDataURL('image/jpeg', 0.7);
+  if (video.readyState < video.HAVE_ENOUGH_DATA) {
+    setTimeout(processLoop, 200);
+    return;
+  }
+
+  isProcessing = true;
+
+  // Inference capture (Fixed size for stability)
+  hiddenCanvas.width = 640;
+  hiddenCanvas.height = 480;
+  h_ctx.drawImage(video, 0, 0, 640, 480);
+  const frame = hiddenCanvas.toDataURL('image/jpeg', 0.8);
 
   try {
-    const res  = await fetch('/process_remote_frame', {
-      method:  'POST',
+    const res = await fetch('/process_remote_frame', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ image: frame }),
+      body: JSON.stringify({ image: frame }),
     });
     const data = await res.json();
 
-    // ── Draw bounding box ──────────────────────────────────────
+    // Clear overlay for fresh drawing
     o_ctx.clearRect(0, 0, overlay.width, overlay.height);
 
-    if (data.box) {
+    if (data && data.box) {
       const [top, right, bottom, left] = data.box;
       const isKnown = data.name && data.name !== 'Unknown';
+      const color = isKnown ? '#4ade80' : '#facc15'; // Green vs Yellow
 
-      // Bounding box colour: green = known, yellow = unknown
-      o_ctx.strokeStyle = isKnown ? '#4ade80' : '#facc15';
-      o_ctx.lineWidth   = 2.5;
-      o_ctx.shadowColor = isKnown ? '#4ade80' : '#facc15';
-      o_ctx.shadowBlur  = 6;
+      // Draw Phone-Style HUD
+      o_ctx.strokeStyle = color;
+      o_ctx.lineWidth = 3;
+      o_ctx.shadowColor = color;
+      o_ctx.shadowBlur = 8;
       o_ctx.strokeRect(left, top, right - left, bottom - top);
-      o_ctx.shadowBlur  = 0;
+      
+      o_ctx.shadowBlur = 0;
+      o_ctx.fillStyle = color;
+      o_ctx.font = 'bold 16px sans-serif';
+      o_ctx.fillText(isKnown ? data.name : 'Unrecognized', left, top > 25 ? top - 10 : top + 25);
 
-      // Name label above box
-      const label = isKnown ? data.name : 'Unknown';
-      o_ctx.fillStyle = isKnown ? '#4ade80' : '#facc15';
-      o_ctx.font      = 'bold 14px sans-serif';
-      o_ctx.fillText(label, left, top > 20 ? top - 8 : top + 20);
-    }
-
-    // ── Update UI panels ──────────────────────────────────────
-    if (data.name && data.name !== 'Unknown') {
+      // Update Side Panel
       nameDisplay.textContent = data.name;
-      nameDisplay.style.color = '#4ade80';
-      accDisplay.textContent  =
-        `Mask: ${data.mask || '—'}  •  Glasses: ${data.glasses || '—'}`;
+      nameDisplay.style.color = color;
+      accDisplay.textContent = `Mask: ${data.mask} • Glasses: ${data.glasses}`;
 
-      // Navigate to detail page
-      const city = document.getElementById('city').value;
-      const url  = `/detail/${encodeURIComponent(data.name)}` +
-                   `?lat=${userCoords.lat}&lon=${userCoords.lon}` +
-                   `&city=${encodeURIComponent(city)}` +
-                   `&mask=${encodeURIComponent(data.mask || '')}` +
-                   `&glasses=${encodeURIComponent(data.glasses || '')}`;
-      active = false;
-      window.location.href = url;
-      return;
+      if (isKnown) {
+        handleRecognitionSuccess(data);
+        return; 
+      }
     } else {
-      nameDisplay.textContent = data.box ? 'Unknown' : 'Scanning...';
-      nameDisplay.style.color = data.box ? '#facc15' : 'var(--text-info)';
-      accDisplay.textContent  = data.box
-        ? `Mask: ${data.mask || '?'}  •  Glasses: ${data.glasses || '?'}`
-        : '—';
+      nameDisplay.textContent = 'Scanning...';
+      nameDisplay.style.color = 'var(--text-info)';
+      accDisplay.textContent = '—';
     }
   } catch (e) {
-    // Silently retry on network blip
+    console.warn("Network hiccup...");
+  } finally {
+    // Release slot after throttle
+    setTimeout(() => {
+      isProcessing = false;
+      requestAnimationFrame(processLoop);
+    }, INFERENCE_THROTTLE_MS);
   }
-
-  setTimeout(processLoop, 600);
 }
-
+function handleRecognitionSuccess(data) {
+    const city = document.getElementById('city').value;
+    const url = `/detail/${encodeURIComponent(data.name)}?lat=${userCoords.lat}&lon=${userCoords.lon}&city=${encodeURIComponent(city)}&mask=${encodeURIComponent(data.mask)}&glasses=${encodeURIComponent(data.glasses)}`;
+    
+    setTimeout(() => {
+        active = false;
+        window.location.href = url;
+    }, 600);
+}
 // ── Liveness / Registration ───────────────────────────────────────
 function beginRegistration() {
   const name = prompt('Enter the name for this face:');
