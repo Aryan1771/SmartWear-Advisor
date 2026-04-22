@@ -1,49 +1,76 @@
 # hf_space/keepalive.py
-# Runs as a background thread inside the Render Flask process.
-# Sends a GET /ping to the HuggingFace Space every 20 minutes so the Space
-# never goes cold while Render itself is receiving traffic.
-#
-# Usage (called once from web_app/app.py at startup):
-#   from keepalive import start_keepalive
-#   start_keepalive()
+# Runs as a background thread inside the Render process.
+# Sends an authenticated GET /ping to the private HuggingFace Space 
+# every 20 minutes to prevent the Space from going to sleep.
 
 import os
 import threading
 import time
 import requests
 
+# Configuration from Environment Variables
 HF_SPACE_URL    = os.getenv("HF_SPACE_URL", "").rstrip("/")
-PING_INTERVAL_S = 20 * 60   # 20 minutes
+HF_TOKEN        = os.getenv("HF_TOKEN")  # Your hf_... access token
+PING_INTERVAL_S = 20 * 60                # 20 minutes
 PING_TIMEOUT_S  = 15
+
 _started        = False
 _lock           = threading.Lock()
 
-
 def _ping_loop():
+    """Background loop that executes the ping."""
     while True:
+        # Wait at the start of the loop
         time.sleep(PING_INTERVAL_S)
+        
         if not HF_SPACE_URL:
+            print("[Keepalive] Error: HF_SPACE_URL is empty. Skipping ping.")
             continue
-        try:
-            r = requests.get(f"{HF_SPACE_URL}/ping", timeout=PING_TIMEOUT_S)
-            print(f"[Keepalive] HF ping → {r.status_code} {r.json()}")
-        except Exception as e:
-            print(f"[Keepalive] HF ping failed: {e}")
 
+        try:
+            # Prepare Authorization header for Private Repo access
+            headers = {}
+            if HF_TOKEN:
+                headers["Authorization"] = f"Bearer {HF_TOKEN}"
+            else:
+                print("[Keepalive] Warning: HF_TOKEN not set. Pings to private spaces may fail.")
+
+            # Execute the ping
+            response = requests.get(
+                f"{HF_SPACE_URL}/ping", 
+                headers=headers, 
+                timeout=PING_TIMEOUT_S
+            )
+            
+            # Log the result
+            if response.status_code == 200:
+                print(f"[Keepalive] Success: HF Space is awake → {response.json()}")
+            else:
+                print(f"[Keepalive] Warning: HF ping returned {response.status_code}. Space might be private or offline.")
+
+        except Exception as e:
+            print(f"[Keepalive] Critical: HF ping failed due to network/error: {e}")
 
 def start_keepalive():
     """
-    Start the keepalive background thread.
-    Safe to call multiple times — only one thread is ever created.
+    Initializes the keepalive thread. 
+    Call this once in your main app.py startup.
     """
     global _started
     with _lock:
         if _started:
             return
+        
         if not HF_SPACE_URL:
-            print("[Keepalive] HF_SPACE_URL not set — keepalive disabled.")
+            print("[Keepalive] HF_SPACE_URL not set — Keepalive disabled.")
             return
+
+        # Create a daemon thread so it closes when the main app closes
         t = threading.Thread(target=_ping_loop, daemon=True, name="hf-keepalive")
         t.start()
         _started = True
-        print(f"[Keepalive] Started — pinging {HF_SPACE_URL}/ping every 20 min.")
+        
+        mask_token = f"{HF_TOKEN[:5]}***" if HF_TOKEN else "None"
+        print(f"[Keepalive] System Active.")
+        print(f"[Keepalive] Target: {HF_SPACE_URL}/ping")
+        print(f"[Keepalive] Auth: Token {mask_token} loaded.")
