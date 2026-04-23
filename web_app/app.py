@@ -12,11 +12,13 @@ from flask import (
 )
 from datetime import datetime
 from functools import wraps
-from backend.db import init_db, add_user_to_db, log_audit
 from keepalive import start_keepalive
-from backend.weather import get_weather, get_hourly_forecast
+from backend.weather_api import (
+    get_weather,
+    get_hourly_forecast,
+    uv_category,
+)
 from backend.recommendation import generate_recommendation
-from backend.utils import uv_category
 from backend.db import (
     init_db,
     add_user_to_db,
