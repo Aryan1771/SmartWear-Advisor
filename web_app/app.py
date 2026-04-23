@@ -18,7 +18,7 @@ from backend.weather_api import (
     get_hourly_forecast,
     uv_category,
 )
-from backend.recommendation import generate_recommendation
+from backend.recommendation_engine import generate_recommendation
 from backend.db import (
     init_db,
     add_user_to_db,
