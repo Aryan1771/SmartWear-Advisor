@@ -22,7 +22,6 @@ self.addEventListener("install", (e) => {
   );
   self.skipWaiting();
 });
-
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
@@ -34,21 +33,24 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-
-  // Always go to network for API/dynamic routes
-  if (NETWORK_ONLY.some((p) => url.pathname.startsWith(p))) {
-    e.respondWith(fetch(e.request).catch(() =>
-      new Response(JSON.stringify({ error: "offline" }), {
-        headers: { "Content-Type": "application/json" },
-      })
-    ));
+  if (url.origin !== location.origin) {
+    e.respondWith(fetch(e.request));
     return;
   }
-
-  // Cache-first for static assets
+  if (NETWORK_ONLY.some((p) => url.pathname.startsWith(p))) {
+    e.respondWith(
+      fetch(e.request).catch(() =>
+        new Response(JSON.stringify({ error: "offline" }), {
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+    );
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then((cached) => {
       if (cached) return cached;
+
       return fetch(e.request).then((resp) => {
         if (resp && resp.status === 200 && e.request.method === "GET") {
           const clone = resp.clone();
