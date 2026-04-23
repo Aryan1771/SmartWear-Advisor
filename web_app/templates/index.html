@@ -494,6 +494,14 @@ function startLiveness() {
     }
     requestAnimationFrame(sendFrame);
   })();
+  setTimeout(() => {
+    if (!blinkDetected && livenessActive) {
+      console.warn("Blink not detected — fallback triggered");
+      livenessActive = false;
+      if (faceMesh) { faceMesh.close(); faceMesh = null; }
+      captureAndRegister();
+    }
+  }, 5000);
 }
 
 async function captureAndRegister() {
