@@ -24,7 +24,13 @@ HF_TOKEN = os.getenv("HF_TOKEN") # Your hf_... token
 
 init_db()
 start_keepalive()
-
+@app.route("/ping")
+def ping():
+#     Health-check for keepalive services.
+#     Register this URL at uptimerobot.com (free, 5-min interval)
+#     to prevent Render free tier from sleeping.
+#     Also pinged by HF Space every 10 min as mutual keepalive.
+    return jsonify({"status": "alive", "service": "SmartWear Render"})
 
 # ── Helpers ───────────────────────────────────────────────────────
 
@@ -236,9 +242,9 @@ def heartbeat():
 # ── Keepalive — start HuggingFace Space ping thread ──────────────
 # Imported here so it runs once when gunicorn loads the app module.
 try:
-    import sys, os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "hf_space"))
-    from keepalive import start_keepalive
-    start_keepalive()
-except Exception as _ke:
-    print(f"[App] Keepalive not started: {_ke}")
+     import sys, os
+     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "hf_space"))
+     from keepalive import start_keepalive
+     start_keepalive(ping_hf=True, ping_render=False)
+ except Exception as _ke:
+     print("[App] Keepalive not started: {}".format(_ke))
