@@ -1,42 +1,83 @@
-// ui.js (UI ONLY)
+// ===================== SMARTWEAR UI CORE =====================
 
-// ── THEME ───────────────────────
-export function toggleTheme() {
+
+// ===================== THEME =====================
+function toggleTheme() {
   const html = document.documentElement;
-  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-  html.setAttribute('data-theme', next);
-  localStorage.setItem('theme', next);
+
+  const current = html.getAttribute("data-theme") || "dark";
+  const next = current === "dark" ? "light" : "dark";
+
+  html.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
 }
 
-export function initTheme() {
-  const saved = localStorage.getItem('theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', saved);
+function initTheme() {
+  const saved = localStorage.getItem("theme") || "dark";
+  document.documentElement.setAttribute("data-theme", saved);
 }
 
-// ── SIDEBAR ─────────────────────
-export function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('collapsed');
+
+// ===================== SIDEBAR =====================
+function toggleSidebar() {
+  const sidebar = document.getElementById("sidebar");
+  if (!sidebar) return;
+
+  sidebar.classList.toggle("collapsed");
 }
 
-// ── STATUS HELPERS ──────────────
-export function updateStatus(text) {
-  document.getElementById('status-text').textContent = text;
+
+// ===================== STATUS HELPERS =====================
+function updateStatus(text) {
+  const el = document.getElementById("status-text");
+  if (!el) return;
+
+  el.textContent = text;
 }
 
-export function updateLocation(text) {
-  document.getElementById('location-msg').textContent = text;
+function updateLocation(text) {
+  const el = document.getElementById("location-msg");
+  if (!el) return;
+
+  el.textContent = text;
 }
 
-// ── PWA ─────────────────────────
-let deferredPrompt;
 
-window.addEventListener('beforeinstallprompt', e => {
+// ===================== PWA INSTALL =====================
+let deferredPrompt = null;
+
+window.addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  document.getElementById('pwa-install-btn').style.display = 'block';
+
+  const btn = document.getElementById("pwa-install-btn");
+  if (btn) btn.style.display = "block";
 });
 
-export function installPWA() {
+function installPWA() {
   if (!deferredPrompt) return;
+
   deferredPrompt.prompt();
+
+  deferredPrompt.userChoice.then(() => {
+    deferredPrompt = null;
+  });
 }
+
+
+// ===================== INIT =====================
+(function initUI() {
+  initTheme();
+  console.log("UI module loaded");
+})();
+
+
+// ===================== SAFE GLOBAL EXPORT =====================
+// (so it works even without type="module")
+
+window.toggleTheme = toggleTheme;
+window.initTheme = initTheme;
+window.toggleSidebar = toggleSidebar;
+window.updateStatus = updateStatus;
+window.updateLocation = updateLocation;
+window.installPWA = installPWA;
