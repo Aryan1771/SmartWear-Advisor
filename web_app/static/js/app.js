@@ -1,4 +1,4 @@
-// app.js (CORE LOGIC)
+// ===================== SMARTWEAR CORE APP =====================
 
 const video = document.getElementById('webcam');
 const overlay = document.getElementById('overlay');
@@ -12,52 +12,62 @@ const accDisplay = document.getElementById('acc-display');
 
 let active = false;
 let isProcessing = false;
+let streamRef = null;
 
 let userCoords = { lat: null, lon: null };
 
 const INFERENCE_THROTTLE = 1200;
 
-// ── GPS ─────────────────────────
-navigator.geolocation.getCurrentPosition(
-  pos => {
-    userCoords = {
-      lat: pos.coords.latitude,
-      lon: pos.coords.longitude
-    };
-    updateLocation("GPS OK");
-  },
-  () => updateLocation("GPS Error")
-);
 
-// ── CAMERA ──────────────────────
-export async function startApp() {
+// ===================== GPS =====================
+function initGPS() {
+  if (!navigator.geolocation) return;
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      userCoords = {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude
+      };
+      updateStatus("GPS OK");
+    },
+    () => updateStatus("GPS Failed")
+  );
+}
+
+
+// ===================== CAMERA =====================
+async function startApp() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user' }
+    streamRef = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" }
     });
 
-    video.srcObject = stream;
+    video.srcObject = streamRef;
     active = true;
 
     updateStatus("Live");
     processLoop();
 
-  } catch {
-    alert("Camera permission denied");
+  } catch (err) {
+    console.error(err);
+    alert("Camera permission denied or unavailable");
   }
 }
 
-export function stopApp() {
+function stopApp() {
   active = false;
 
-  if (video.srcObject) {
-    video.srcObject.getTracks().forEach(t => t.stop());
+  if (streamRef) {
+    streamRef.getTracks().forEach(track => track.stop());
+    streamRef = null;
   }
 
   updateStatus("Stopped");
 }
 
-// ── MAIN LOOP ───────────────────
+
+// ===================== MAIN LOOP =====================
 async function processLoop() {
   if (!active) return;
 
@@ -68,16 +78,17 @@ async function processLoop() {
 
   isProcessing = true;
 
-  hiddenCanvas.width = 320;
-  hiddenCanvas.height = 240;
-  ctx.drawImage(video, 0, 0, 320, 240);
-
-  const frame = hiddenCanvas.toDataURL('image/jpeg', 0.6);
-
   try {
-    const res = await fetch('/process_remote_frame', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    hiddenCanvas.width = 320;
+    hiddenCanvas.height = 240;
+
+    ctx.drawImage(video, 0, 0, 320, 240);
+
+    const frame = hiddenCanvas.toDataURL("image/jpeg", 0.6);
+
+    const res = await fetch("/process_remote_frame", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image: frame })
     });
 
@@ -85,13 +96,13 @@ async function processLoop() {
 
     drawOverlay(data);
 
-    if (data && data.name && data.name !== "Unknown") {
+    if (data?.name && data.name !== "Unknown") {
       handleSuccess(data);
       return;
     }
 
-  } catch (e) {
-    console.warn("Network issue");
+  } catch (err) {
+    console.warn("Inference error:", err);
   }
 
   setTimeout(() => {
@@ -100,11 +111,14 @@ async function processLoop() {
   }, INFERENCE_THROTTLE);
 }
 
-// ── DRAW ────────────────────────
+
+// ===================== OVERLAY =====================
 function drawOverlay(data) {
+  if (!overlay || !octx) return;
+
   octx.clearRect(0, 0, overlay.width, overlay.height);
 
-  if (!data || !data.box) return;
+  if (!data?.box) return;
 
   const [t, r, b, l] = data.box;
   const known = data.name !== "Unknown";
@@ -119,23 +133,31 @@ function drawOverlay(data) {
   octx.font = "bold 14px sans-serif";
   octx.fillText(known ? data.name : "Unknown", l, t - 5);
 
-  nameDisplay.textContent = data.name;
-  nameDisplay.style.color = color;
+  if (nameDisplay) {
+    nameDisplay.textContent = data.name;
+    nameDisplay.style.color = color;
+  }
 
-  accDisplay.textContent =
-    `Mask: ${data.mask} • Glasses: ${data.glasses}`;
+  if (accDisplay) {
+    accDisplay.textContent =
+      `Mask: ${data.mask} • Glasses: ${data.glasses}`;
+  }
 }
 
-// ── SUCCESS ─────────────────────
-function handleSuccess(data) {
-  const city = document.getElementById('city').value;
 
-  const url = `/detail/${encodeURIComponent(data.name)}`
-    + `?lat=${userCoords.lat}`
-    + `&lon=${userCoords.lon}`
-    + `&city=${encodeURIComponent(city)}`
-    + `&mask=${encodeURIComponent(data.mask)}`
-    + `&glasses=${encodeURIComponent(data.glasses)}`;
+// ===================== SUCCESS FLOW =====================
+function handleSuccess(data) {
+  const cityEl = document.getElementById("city");
+
+  const city = cityEl ? cityEl.value : "Unknown";
+
+  const url =
+    `/detail/${encodeURIComponent(data.name)}` +
+    `?lat=${userCoords.lat || ""}` +
+    `&lon=${userCoords.lon || ""}` +
+    `&city=${encodeURIComponent(city)}` +
+    `&mask=${encodeURIComponent(data.mask || "")}` +
+    `&glasses=${encodeURIComponent(data.glasses || "")}`;
 
   setTimeout(() => {
     active = false;
@@ -143,28 +165,51 @@ function handleSuccess(data) {
   }, 500);
 }
 
-// ── REGISTER ────────────────────
-export async function registerUser() {
+
+// ===================== REGISTER =====================
+async function registerUser() {
   const name = prompt("Enter name");
   if (!name) return;
 
-  hiddenCanvas.width = 320;
-  hiddenCanvas.height = 240;
-  ctx.drawImage(video, 0, 0, 320, 240);
-
-  const frame = hiddenCanvas.toDataURL('image/jpeg', 0.7);
-
   try {
-    const res = await fetch('/register_remote', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    hiddenCanvas.width = 320;
+    hiddenCanvas.height = 240;
+
+    ctx.drawImage(video, 0, 0, 320, 240);
+
+    const frame = hiddenCanvas.toDataURL("image/jpeg", 0.7);
+
+    const res = await fetch("/register_remote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, image: frame })
     });
 
     const data = await res.json();
-    alert(data.success ? "Registered" : "Failed");
 
-  } catch {
+    alert(data.success ? "Registered successfully" : "Registration failed");
+
+  } catch (err) {
+    console.error(err);
     alert("Server error");
   }
 }
+
+
+// ===================== STATUS =====================
+function updateStatus(msg) {
+  console.log("[SmartWear]", msg);
+}
+
+
+// ===================== INIT =====================
+(function init() {
+  initGPS();
+  console.log("SmartWear App Loaded");
+})();
+
+
+// ===================== GLOBAL EXPORTS (safe) =====================
+window.startApp = startApp;
+window.stopApp = stopApp;
+window.registerUser = registerUser;
