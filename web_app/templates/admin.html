@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>Admin Dashboard | SmartWear Advisor</title>
 
   <link rel="manifest" href="/static/manifest.json">
@@ -15,37 +16,53 @@
 
 <body>
 
-<!-- Sidebar -->
-<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+<!-- ================= SIDEBAR ================= -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <nav class="sidebar" id="sidebar">
+
   <div class="sidebar-header">
     <span class="sidebar-logo">SmartWear</span>
     <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
   </div>
 
   <div class="sidebar-nav">
+
     <a href="/" class="sidebar-item">🏠 Home</a>
+
     <a href="/admin/dashboard" class="sidebar-item active">📊 Dashboard</a>
-    <a href="#users" onclick="scrollTo('users')" class="sidebar-item">👥 Users</a>
-    <a href="#history" onclick="scrollTo('history')" class="sidebar-item">🕒 History</a>
-    <a href="#audit" onclick="scrollTo('audit')" class="sidebar-item">📋 Audit</a>
+
+    <a href="javascript:void(0)" onclick="scrollToSection('users')" class="sidebar-item">
+      👥 Users
+    </a>
+
+    <a href="javascript:void(0)" onclick="scrollToSection('history')" class="sidebar-item">
+      🕒 History
+    </a>
+
+    <a href="javascript:void(0)" onclick="scrollToSection('audit')" class="sidebar-item">
+      📋 Audit
+    </a>
+
     <a href="/admin/export_csv" class="sidebar-item">📥 Export</a>
+
     <div class="sidebar-divider"></div>
 
-    <a href="/admin/logout" class="sidebar-item" style="color:red">🔓 Logout</a>
+    <a href="/admin/logout" class="sidebar-item" style="color:red;">🔓 Logout</a>
+
   </div>
 </nav>
 
 <button class="hamburger" onclick="toggleSidebar()">☰</button>
 
-<!-- Main -->
+<!-- ================= MAIN ================= -->
 <div class="main-content" id="main-content">
 
   <h1 style="margin-bottom:20px;">Admin Dashboard</h1>
 
-  <!-- Stats -->
+  <!-- ================= STATS ================= -->
   <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px;">
+
     <div class="card">
       <h2 id="stat-users">{{ users|length }}</h2>
       <p>Users</p>
@@ -60,25 +77,31 @@
       <h2 id="stat-mask">0%</h2>
       <p>Mask Usage</p>
     </div>
-  </div>
-<!-- ── Analytics Graphs ───────────────────────────────────────── -->
-<div class="panel" style="margin-bottom:24px; padding:20px;">
-  <h2 style="font-size:16px; font-weight:700; margin-bottom:16px;">
-    📊 Live Analytics
-  </h2>
-
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-    
-    <canvas id="trendChart"></canvas>
-    <canvas id="maskChart"></canvas>
-    
-    <canvas id="glassesChart" style="grid-column: span 2;"></canvas>
 
   </div>
-</div>
-  <!-- Users -->
+
+  <!-- ================= ANALYTICS ================= -->
+  <div class="panel" style="margin-bottom:24px; padding:20px;">
+
+    <h2 style="font-size:16px; font-weight:700; margin-bottom:16px;">
+      📊 Live Analytics
+    </h2>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+
+      <canvas id="trendChart"></canvas>
+      <canvas id="maskChart"></canvas>
+
+      <canvas id="glassesChart" style="grid-column: span 2;"></canvas>
+
+    </div>
+
+  </div>
+
+  <!-- ================= USERS ================= -->
   <div id="users">
     <h2>Users</h2>
+
     <table class="admin-table">
       <thead>
         <tr>
@@ -87,6 +110,7 @@
           <th>Detections</th>
         </tr>
       </thead>
+
       <tbody>
         {% for u in users %}
         <tr>
@@ -99,9 +123,10 @@
     </table>
   </div>
 
-  <!-- History -->
+  <!-- ================= HISTORY ================= -->
   <div id="history" style="margin-top:30px;">
     <h2>Detection History</h2>
+
     <table class="admin-table">
       <thead>
         <tr>
@@ -115,6 +140,7 @@
           <th>UV</th>
         </tr>
       </thead>
+
       <tbody id="history-tbody">
         {% for h in history %}
         <tr>
@@ -130,11 +156,13 @@
         {% endfor %}
       </tbody>
     </table>
+
   </div>
 
-  <!-- Audit -->
+  <!-- ================= AUDIT ================= -->
   <div id="audit" style="margin-top:30px;">
     <h2>Audit Log</h2>
+
     <table class="admin-table">
       <thead>
         <tr>
@@ -144,6 +172,7 @@
           <th>Time</th>
         </tr>
       </thead>
+
       <tbody>
         {% for a in audit %}
         <tr>
@@ -155,151 +184,13 @@
         {% endfor %}
       </tbody>
     </table>
+
   </div>
 
 </div>
 
-<!-- Scripts -->
-<script>
-// Theme
-function toggleTheme() {
-  const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', t);
-}
+<!-- ================= SCRIPTS ================= -->
+<script src="/static/js/admin.js"></script>
 
-// Sidebar
-function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('collapsed');
-}
-
-// Scroll
-function scrollTo(id) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-}
-
-// WebSocket
-const socket = io();
-
-socket.on("connect", () => {
-  console.log("✅ Connected to WebSocket");
-});
-
-socket.on("disconnect", () => {
-  console.log("❌ Disconnected");
-});
-
-// New Detection → Live Row Insert
-socket.on("new_detection", (data) => {
-  const tbody = document.getElementById("history-tbody");
-  if (!tbody) return;
-
-  const row = document.createElement("tr");
-
-  row.innerHTML = `
-    <td>${data.name}</td>
-    <td>${data.time}</td>
-    <td>${data.mask}</td>
-    <td>${data.glasses}</td>
-    <td>${data.city || '-'}</td>
-    <td>${data.temp ? data.temp + '°C' : '-'}</td>
-    <td>${data.aqi || '-'}</td>
-    <td>${data.uv || '-'}</td>
-  `;
-
-  tbody.prepend(row);
-
-  // Update detection count
-  const det = document.getElementById("stat-detections");
-  if (det) det.textContent = parseInt(det.textContent) + 1;
-});
-
-// Analytics Update
-socket.on("analytics_update", (data) => {
-  const maskEl = document.getElementById("stat-mask");
-  if (maskEl) maskEl.textContent = data.mask_rate.toFixed(1) + "%";
-  // Optional: reload charts instantly
-  loadAnalytics();
-});
-
-// Heartbeat
-setInterval(() => {
-  fetch('/admin/heartbeat', { method: 'POST' }).catch(()=>{});
-}, 60000);
-
-</script>
-<script>
-// FIXED SOCKET
-const socket = io({ transports: ["websocket", "polling"] });
-
-// LIVE DETECTION
-socket.on("new_detection", (data) => {
-  const tbody = document.getElementById("history-tbody");
-  if (!tbody) return;
-
-  const row = document.createElement("tr");
-
-  row.innerHTML = `
-    <td>${data.name}</td>
-    <td>${data.time}</td>
-    <td>${data.mask}</td>
-    <td>${data.glasses}</td>
-    <td>${data.city || '-'}</td>
-    <td>${data.temp ? data.temp + '°C' : '-'}</td>
-    <td>${data.aqi || '-'}</td>
-    <td>${data.uv || '-'}</td>
-  `;
-
-  tbody.prepend(row);
-
-  const det = document.getElementById("stat-detections");
-  if (det) det.textContent = parseInt(det.textContent) + 1;
-});
-
-// ANALYTICS UPDATE
-socket.on("analytics_update", (data) => {
-  document.getElementById("stat-mask").textContent =
-    data.mask_rate.toFixed(1) + "%";
-});
-
-// CHARTS
-let trendChart, maskChart, glassesChart;
-
-async function loadAnalytics() {
-  const res = await fetch('/admin/analytics');
-  const data = await res.json();
-
-  if (!data) return;
-
-  if (trendChart) trendChart.destroy();
-  trendChart = new Chart(document.getElementById('trendChart'), {
-    type: 'line',
-    data: {
-      labels: data.days,
-      datasets: [{ label: 'Detections', data: data.detections }]
-    }
-  });
-
-  if (maskChart) maskChart.destroy();
-  maskChart = new Chart(document.getElementById('maskChart'), {
-    type: 'pie',
-    data: {
-      labels: Object.keys(data.mask),
-      datasets: [{ data: Object.values(data.mask) }]
-    }
-  });
-
-  if (glassesChart) glassesChart.destroy();
-  glassesChart = new Chart(document.getElementById('glassesChart'), {
-    type: 'bar',
-    data: {
-      labels: Object.keys(data.glasses),
-      datasets: [{ data: Object.values(data.glasses) }]
-    }
-  });
-}
-
-loadAnalytics();
-setInterval(loadAnalytics, 30000);
-</script>
 </body>
 </html>
