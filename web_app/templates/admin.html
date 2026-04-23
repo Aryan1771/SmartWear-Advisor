@@ -4,354 +4,212 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard | SmartWear Advisor</title>
+
   <link rel="manifest" href="/static/manifest.json">
   <link rel="stylesheet" href="/static/css/style.css">
+
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
+
 <body>
 
-<!-- ══════════════════ SIDEBAR ══════════════════ -->
+<!-- Sidebar -->
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 
 <nav class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <span class="sidebar-logo">SmartWear</span>
-    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">🌙</button>
+    <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
   </div>
+
   <div class="sidebar-nav">
-    <span class="sidebar-section-label">Navigation</span>
-    <a href="/" class="sidebar-item">
-      <span class="icon">🏠</span> Home
-    </a>
-    <span class="sidebar-section-label" style="margin-top:8px;">Admin</span>
-    <a href="/admin/dashboard" class="sidebar-item active">
-      <span class="icon">📊</span> Dashboard
-    </a>
-    <a href="#users" class="sidebar-item" onclick="scrollTo('users')">
-      <span class="icon">👥</span> Registered Faces
-    </a>
-    <a href="#history" class="sidebar-item" onclick="scrollTo('history')">
-      <span class="icon">🕒</span> Detection History
-    </a>
-    <a href="#audit" class="sidebar-item" onclick="scrollTo('audit')">
-      <span class="icon">📋</span> Audit Log
-    </a>
-    <a href="/admin/export_csv" class="sidebar-item">
-      <span class="icon">📥</span> Export CSV
-    </a>
+    <a href="/" class="sidebar-item">🏠 Home</a>
+    <a href="/admin/dashboard" class="sidebar-item active">📊 Dashboard</a>
+    <a href="#users" onclick="scrollTo('users')" class="sidebar-item">👥 Users</a>
+    <a href="#history" onclick="scrollTo('history')" class="sidebar-item">🕒 History</a>
+    <a href="#audit" onclick="scrollTo('audit')" class="sidebar-item">📋 Audit</a>
+    <a href="/admin/export_csv" class="sidebar-item">📥 Export</a>
+
     <div class="sidebar-divider"></div>
-    <a href="/admin/logout" class="sidebar-item" style="color:var(--text-danger)">
-      <span class="icon">🔓</span> Logout
-    </a>
-  </div>
-  <div class="sidebar-footer">
-    <span style="font-size:11px; color:var(--text-secondary);">SmartWear Advisor v2.0</span>
+
+    <a href="/admin/logout" class="sidebar-item" style="color:red">🔓 Logout</a>
   </div>
 </nav>
 
-<button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
+<button class="hamburger" onclick="toggleSidebar()">☰</button>
 
-<!-- ══════════════════ MAIN CONTENT ══════════════════ -->
+<!-- Main -->
 <div class="main-content" id="main-content">
 
-  <div class="top-bar">
-    <h1 style="padding-left:44px;">Admin Dashboard</h1>
-    <div style="display:flex; gap:8px; align-items:center;">
-      <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn-top">🌙</button>
-      <a href="/admin/export_csv" class="btn btn-primary" style="text-decoration:none; font-size:13px;">
-        📥 Export CSV
-      </a>
-      <a href="/admin/logout" class="btn btn-danger" style="text-decoration:none; font-size:13px;">
-        🔓 Logout
-      </a>
+  <h1 style="margin-bottom:20px;">Admin Dashboard</h1>
+
+  <!-- Stats -->
+  <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px;">
+    <div class="card">
+      <h2 id="stat-users">{{ users|length }}</h2>
+      <p>Users</p>
+    </div>
+
+    <div class="card">
+      <h2 id="stat-detections">{{ history|length }}</h2>
+      <p>Detections</p>
+    </div>
+
+    <div class="card">
+      <h2 id="stat-mask">0%</h2>
+      <p>Mask Usage</p>
     </div>
   </div>
 
-  <!-- Flash messages -->
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for cat, msg in messages %}
-        <div class="flash-msg flash-{{ cat }}">{{ msg }}</div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
-
-  <!-- ── Stats bar ─────────────────────────────────────────────── -->
-  <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:24px;">
-    <div class="card" style="text-align:center;">
-      <p style="font-size:28px; font-weight:700; color:var(--text-primary);">{{ users|length }}</p>
-      <p style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Registered Users</p>
-    </div>
-    <div class="card" style="text-align:center;">
-      <p style="font-size:28px; font-weight:700; color:var(--text-info);">{{ history|length }}</p>
-      <p style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Recent Detections</p>
-    </div>
-    <div class="card" style="text-align:center;">
-      <p style="font-size:28px; font-weight:700; color:var(--text-warning);">{{ audit|length }}</p>
-      <p style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Audit Entries</p>
-    </div>
+  <!-- Users -->
+  <div id="users">
+    <h2>Users</h2>
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Registered</th>
+          <th>Detections</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{ u.name }}</td>
+          <td>{{ u.registered_on or '-' }}</td>
+          <td>{{ u.detection_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 
-  <!-- ── Registered Users ──────────────────────────────────────── -->
-  <div class="panel" id="users" style="margin-bottom:24px;">
-    <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex;
-                justify-content:space-between; align-items:center;">
-      <h2 style="font-size:14px; font-weight:700; color:var(--text-primary);">
-        👥 Registered Faces
-      </h2>
-      <input type="text" id="user-search" class="input-field"
-             style="width:200px;" placeholder="Search by name..."
-             oninput="filterTable('user-tbody', this.value)">
-    </div>
-    {% if users %}
-    <div style="overflow-x:auto;">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Registered On</th>
-            <th>Notes</th>
-            <th>Detections</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="user-tbody">
-          {% for user in users %}
-          <tr>
-            <td style="font-weight:600; color:var(--text-primary);">{{ user.name }}</td>
-            <td style="color:var(--text-secondary);">{{ user.registered_on or '—' }}</td>
-            <td style="color:var(--text-secondary); font-size:12px;">{{ user.notes or '—' }}</td>
-            <td style="color:var(--text-info);">{{ user.detection_count or 0 }}</td>
-            <td>
-              <form method="POST" action="/admin/user/{{ user.name }}/delete"
-                    onsubmit="return confirm('Delete {{ user.name }}? This cannot be undone.');">
-                <button type="submit" class="btn btn-danger"
-                        style="padding:4px 10px; font-size:12px;">
-                  Delete
-                </button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <div style="padding:32px; text-align:center; color:var(--text-secondary);">
-      No registered users yet. Register a face from the home page.
-    </div>
-    {% endif %}
+  <!-- History -->
+  <div id="history" style="margin-top:30px;">
+    <h2>Detection History</h2>
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Time</th>
+          <th>Mask</th>
+          <th>Glasses</th>
+          <th>City</th>
+          <th>Temp</th>
+          <th>AQI</th>
+          <th>UV</th>
+        </tr>
+      </thead>
+      <tbody id="history-tbody">
+        {% for h in history %}
+        <tr>
+          <td>{{ h.name }}</td>
+          <td>{{ h.timestamp[:16] if h.timestamp else '-' }}</td>
+          <td>{{ h.mask }}</td>
+          <td>{{ h.glasses }}</td>
+          <td>{{ h.city }}</td>
+          <td>{{ h.temp }}°C</td>
+          <td>{{ h.aqi_label }}</td>
+          <td>{{ h.uv_index }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 
-  <!-- ── Detection History ─────────────────────────────────────── -->
-  <div class="panel" id="history" style="margin-bottom:24px;">
-    <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex;
-                justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-      <h2 style="font-size:14px; font-weight:700; color:var(--text-primary);">
-        🕒 Detection History
-      </h2>
-      <div style="display:flex; gap:8px;">
-        <input type="text" id="history-search" class="input-field"
-               style="width:180px;" placeholder="Filter by name..."
-               oninput="filterTable('history-tbody', this.value)">
-        <select id="history-filter" class="input-field" style="width:140px;"
-                onchange="filterByColumn('history-tbody', 2, this.value)">
-          <option value="">All accessories</option>
-          <option value="Mask">With Mask</option>
-          <option value="Glasses">With Glasses</option>
-        </select>
-      </div>
-    </div>
-    {% if history %}
-    <div style="overflow-x:auto;">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Timestamp</th>
-            <th>Mask</th>
-            <th>Glasses</th>
-            <th>City</th>
-            <th>Temp</th>
-            <th>AQI</th>
-            <th>UV</th>
-          </tr>
-        </thead>
-        <tbody id="history-tbody">
-          {% for h in history %}
-          <tr>
-            <td style="font-weight:600;">{{ h.name }}</td>
-            <td style="font-size:12px; color:var(--text-secondary);">
-              {{ h.timestamp[:16] if h.timestamp else '—' }}
-            </td>
-            <td>
-              <span style="color:{{ 'var(--text-success)' if h.mask == 'Mask' else 'var(--text-secondary)' }};">
-                {{ h.mask or '—' }}
-              </span>
-            </td>
-            <td>
-              <span style="color:{{ 'var(--text-success)' if h.glasses == 'Glasses' else 'var(--text-secondary)' }};">
-                {{ h.glasses or '—' }}
-              </span>
-            </td>
-            <td style="color:var(--text-secondary);">{{ h.city or '—' }}</td>
-            <td>{{ h.temp or '—' }}{% if h.temp %}°C{% endif %}</td>
-            <td>
-              <span style="font-size:12px;
-                color:{% if h.aqi and h.aqi >= 4 %}var(--text-danger)
-                      {% elif h.aqi and h.aqi == 3 %}var(--text-warning)
-                      {% else %}var(--text-secondary){% endif %};">
-                {{ h.aqi_label or '—' }}
-              </span>
-            </td>
-            <td style="color:var(--text-secondary);">
-              {{ h.uv_index if h.uv_index is not none else '—' }}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <div style="padding:32px; text-align:center; color:var(--text-secondary);">
-      No detection history yet.
-    </div>
-    {% endif %}
-  </div>
-
-  <!-- ── Audit Log ──────────────────────────────────────────────── -->
-  <div class="panel" id="audit" style="margin-bottom:40px;">
-    <div style="padding:16px 20px; border-bottom:1px solid var(--border);">
-      <h2 style="font-size:14px; font-weight:700; color:var(--text-primary);">
-        📋 Audit Log
-      </h2>
-    </div>
-    {% if audit %}
-    <div style="overflow-x:auto;">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>Event</th>
-            <th>Detail</th>
-            <th>IP Address</th>
-            <th>Timestamp</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for a in audit %}
-          <tr>
-            <td>
-              <span style="display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px;
-                font-weight:700; letter-spacing:0.04em;
-                background:{% if 'LOGIN' in a.event %}rgba(88,166,255,0.15)
-                            {% elif 'DELETE' in a.event %}rgba(255,123,114,0.15)
-                            {% elif 'EXPORT' in a.event %}rgba(63,185,80,0.15)
-                            {% else %}rgba(242,204,96,0.15){% endif %};
-                color:{% if 'LOGIN' in a.event %}var(--text-info)
-                      {% elif 'DELETE' in a.event %}var(--text-danger)
-                      {% elif 'EXPORT' in a.event %}var(--text-success)
-                      {% else %}var(--text-warning){% endif %};">
-                {{ a.event }}
-              </span>
-            </td>
-            <td style="font-size:13px; color:var(--text-secondary);">{{ a.detail or '—' }}</td>
-            <td style="font-size:12px; color:var(--text-secondary); font-family:monospace;">
-              {{ a.ip or '—' }}
-            </td>
-            <td style="font-size:12px; color:var(--text-secondary);">
-              {{ a.timestamp[:16] if a.timestamp else '—' }}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <div style="padding:32px; text-align:center; color:var(--text-secondary);">
-      No audit entries yet.
-    </div>
-    {% endif %}
+  <!-- Audit -->
+  <div id="audit" style="margin-top:30px;">
+    <h2>Audit Log</h2>
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Event</th>
+          <th>Detail</th>
+          <th>IP</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in audit %}
+        <tr>
+          <td>{{ a.event }}</td>
+          <td>{{ a.detail }}</td>
+          <td>{{ a.ip }}</td>
+          <td>{{ a.timestamp[:16] if a.timestamp else '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 
 </div>
-<!-- /main-content -->
 
+<!-- Scripts -->
 <script>
-// ── Theme ──────────────────────────────────────────────────────────
-function applyTheme(t) {
-  document.documentElement.setAttribute('data-theme', t);
-  const icon = t === 'dark' ? '🌙' : '☀️';
-  ['theme-btn','theme-btn-top'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = icon;
-  });
-}
+// Theme
 function toggleTheme() {
-  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-  localStorage.setItem('sw-theme', next);
-  applyTheme(next);
-}
-applyTheme(localStorage.getItem('sw-theme') || 'dark');
-
-// ── Sidebar ────────────────────────────────────────────────────────
-let sidebarOpen = window.innerWidth >= 768;
-function toggleSidebar() { sidebarOpen ? closeSidebar() : openSidebar(); }
-function openSidebar() {
-  sidebarOpen = true;
-  document.getElementById('sidebar').classList.remove('collapsed');
-  document.getElementById('sidebar').classList.add('mobile-open');
-  document.getElementById('sidebar-overlay').classList.add('visible');
-  if (window.innerWidth >= 768)
-    document.getElementById('main-content').style.marginLeft = 'var(--sidebar-width)';
-}
-function closeSidebar() {
-  sidebarOpen = false;
-  document.getElementById('sidebar').classList.add('collapsed');
-  document.getElementById('sidebar').classList.remove('mobile-open');
-  document.getElementById('sidebar-overlay').classList.remove('visible');
-  document.getElementById('main-content').style.marginLeft = '0';
-}
-if (window.innerWidth < 768) closeSidebar();
-else document.getElementById('main-content').style.marginLeft = 'var(--sidebar-width)';
-
-// ── Table search ───────────────────────────────────────────────────
-function filterTable(tbodyId, query) {
-  const rows = document.querySelectorAll(`#${tbodyId} tr`);
-  const q    = query.toLowerCase();
-  rows.forEach(r => {
-    r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
-  });
+  const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', t);
 }
 
-function filterByColumn(tbodyId, colIdx, query) {
-  const rows = document.querySelectorAll(`#${tbodyId} tr`);
-  rows.forEach(r => {
-    const cell = r.querySelectorAll('td')[colIdx];
-    if (!query || !cell) { r.style.display = ''; return; }
-    r.style.display = cell.textContent.includes(query) ? '' : 'none';
-  });
+// Sidebar
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('collapsed');
 }
 
-// ── Scroll to section ──────────────────────────────────────────────
+// Scroll
 function scrollTo(id) {
-  const el = document.getElementById(id);
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 }
 
-// ── Session heartbeat (every 60s keeps admin session alive) ────────
+// WebSocket
+const socket = io();
+
+socket.on("connect", () => {
+  console.log("✅ Connected to WebSocket");
+});
+
+socket.on("disconnect", () => {
+  console.log("❌ Disconnected");
+});
+
+// New Detection → Live Row Insert
+socket.on("new_detection", (data) => {
+  const tbody = document.getElementById("history-tbody");
+  if (!tbody) return;
+
+  const row = document.createElement("tr");
+
+  row.innerHTML = `
+    <td>${data.name}</td>
+    <td>${data.time}</td>
+    <td>${data.mask}</td>
+    <td>${data.glasses}</td>
+    <td>${data.city || '-'}</td>
+    <td>${data.temp ? data.temp + '°C' : '-'}</td>
+    <td>${data.aqi || '-'}</td>
+    <td>${data.uv || '-'}</td>
+  `;
+
+  tbody.prepend(row);
+
+  // Update detection count
+  const det = document.getElementById("stat-detections");
+  if (det) det.textContent = parseInt(det.textContent) + 1;
+});
+
+// Analytics Update
+socket.on("analytics_update", (data) => {
+  const mask = document.getElementById("stat-mask");
+  if (mask) mask.textContent = data.mask_rate.toFixed(1) + "%";
+});
+
+// Heartbeat
 setInterval(() => {
-  fetch('/admin/heartbeat', { method: 'POST' }).catch(() => {});
+  fetch('/admin/heartbeat', { method: 'POST' }).catch(()=>{});
 }, 60000);
 
-// ── Session timeout warning (25 min) ──────────────────────────────
-setTimeout(() => {
-  if (confirm('Your admin session will expire in 5 minutes. Stay logged in?')) {
-    fetch('/admin/heartbeat', { method: 'POST' });
-  }
-}, 25 * 60 * 1000);
-
-if ('serviceWorker' in navigator)
-  navigator.serviceWorker.register('/static/js/sw.js').catch(() => {});
 </script>
 
 </body>
