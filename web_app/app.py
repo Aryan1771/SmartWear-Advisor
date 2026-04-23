@@ -1,24 +1,22 @@
-# web_app/app.py
-# Flask web application for SmartWear Advisor.
-# All ML inference is proxied to the HuggingFace Space FastAPI server.
-# UI: index, detail, admin dashboard, admin login.
-
 import os, io, csv
 import requests
-import base64
 from flask import (
     Flask, render_template, request, jsonify,
     session, redirect, url_for, Response, flash,
 )
 from datetime import datetime
 from functools import wraps
-from keepalive import start_keepalive
+
+# ✅ WebSocket
+from flask_socketio import SocketIO
+
 from backend.weather_api import (
     get_weather,
     get_hourly_forecast,
     uv_category,
 )
 from backend.recommendation_engine import generate_recommendation
+
 from backend.db import (
     init_db,
     add_user_to_db,
@@ -26,29 +24,39 @@ from backend.db import (
     get_all_users,
     get_detection_history,
     get_audit_log,
-    log_detection
+    log_detection,
+    delete_user_from_db
 )
+
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "smartwear-secure-key")
 
-# Configuration
+# ✅ SocketIO INIT
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Config
 HF_SPACE_URL = os.getenv("HF_SPACE_URL", "").rstrip("/")
-HF_TOKEN = os.getenv("HF_TOKEN") # Your hf_... token
+HF_TOKEN = os.getenv("HF_TOKEN")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+SESSION_TIMEOUT = 30 * 60
 
 init_db()
-start_keepalive()
-@app.route("/ping")
-def ping():
-#     Health-check for keepalive services.
-#     Register this URL at uptimerobot.com (free, 5-min interval)
-#     to prevent Render free tier from sleeping.
-#     Also pinged by HF Space every 10 min as mutual keepalive.
-    return jsonify({"status": "alive", "service": "SmartWear Render"})
 
-# ── Helpers ───────────────────────────────────────────────────────
+# ── Helpers ─────────────────────────────
+
+def broadcast_analytics():
+    history = get_detection_history(limit=200) or []
+
+    total = len(history)
+    mask = sum(1 for h in history if h.get("mask") == "Mask")
+
+    socketio.emit("analytics_update", {
+        "total": total,
+        "mask_rate": (mask / total * 100) if total else 0
+    })
+
 
 def _hf(endpoint: str, payload: dict):
-    """Authenticated proxy to the Private Hugging Face Space."""
     try:
         headers = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
         r = requests.post(
@@ -68,16 +76,15 @@ def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if not session.get("admin"):
-            flash("Please log in as admin.", "warning")
             return redirect(url_for("admin_login"))
-        # Session timeout check
+
         last = session.get("last_active")
         if last:
             elapsed = (datetime.now() - datetime.fromisoformat(last)).total_seconds()
             if elapsed > SESSION_TIMEOUT:
                 session.clear()
-                flash("Session timed out after 30 minutes of inactivity.", "warning")
                 return redirect(url_for("admin_login"))
+
         session["last_active"] = datetime.now().isoformat()
         return f(*args, **kwargs)
     return decorated
@@ -86,236 +93,125 @@ def admin_required(f):
 def _is_admin():
     return bool(session.get("admin"))
 
-
-# ── Public routes ─────────────────────────────────────────────────
+# ── Routes ─────────────────────────────
 
 @app.route("/")
 def index():
-    return render_template("index.html", admin_logged_in=bool(session.get("admin")))
+    return render_template("index.html", admin_logged_in=_is_admin())
 
 
 @app.route("/process_remote_frame", methods=["POST"])
 def process_remote_frame():
     data = request.json or {}
     result = _hf("/detect", {"image": data.get("image", "")})
-    return jsonify(result if result else {"name": "Unknown", "box": None})
+    return jsonify(result if result else {"name": "Unknown"})
 
 
 @app.route("/register_remote", methods=["POST"])
 def register_remote():
-    """Proxy registration frame + name to HF Space, then persist user in DB."""
-    data  = request.json or {}
-    name  = data.get("name", "").strip()
+    data = request.json or {}
+    name = data.get("name", "").strip()
     image = data.get("image", "")
 
-    if not name:
-        return jsonify({"success": False, "message": "Name cannot be empty."})
-    if not image:
-        return jsonify({"success": False, "message": "No image received."})
+    if not name or not image:
+        return jsonify({"success": False})
 
     result = _hf("/register", {"image": image, "name": name})
+
     if result and result.get("success"):
         add_user_to_db(name)
-        log_audit("REGISTRATION", f"User '{name}' registered", request.remote_addr)
-    return jsonify(result if result else {"success": False, "message": "Backend Unreachable"})
+        log_audit("REGISTRATION", name, request.remote_addr)
+
+    return jsonify(result or {"success": False})
+
 
 @app.route("/detail/<name>")
 def detail(name):
-    lat     = request.args.get("lat")
-    lon     = request.args.get("lon")
-    city    = request.args.get("city", "Ghaziabad")
-    mask    = request.args.get("mask", "No Mask")
+    lat = request.args.get("lat")
+    lon = request.args.get("lon")
+    city = request.args.get("city", "Delhi")
+    mask = request.args.get("mask", "No Mask")
     glasses = request.args.get("glasses", "No Glasses")
 
-    # ── Weather ─────────────────────────────
-    query = f"{lat},{lon}" if lat and lat not in ("null", "None", "") else city
-    weather = get_weather(query) or {}
+    query = f"{lat},{lon}" if lat else city
+    weather = get_weather(query)
 
-    # ── Forecast ────────────────────────────
-    w_lat = weather.get("lat") or lat
-    w_lon = weather.get("lon") or lon
-
-    if w_lat and w_lon:
-        forecast = get_hourly_forecast(w_lat, w_lon)
-    else:
-        forecast = []
-
-    # ── Recommendations ─────────────────────
-    try:
-        recs = generate_recommendation(weather, mask, glasses, forecast)
-    except Exception as e:
-        print("[Detail] Recommendation error:", e)
-        recs = []
-
-    # ── UV ──────────────────────────────────
-    try:
-        uv_label, uv_class = uv_category(weather.get("uv_index", 0))
-    except:
-        uv_label, uv_class = "Unknown", "low"
-
-    # ── Profile ─────────────────────────────
-    users = get_all_users()
-    profile = next(
-        (u for u in users if u.get("name") == name),
-        {
-            "registered_on": "N/A",
-            "notes": "Mobile Registration",
-            "detection_count": 0
-        }
+    forecast = get_hourly_forecast(
+        weather.get("lat"),
+        weather.get("lon")
     )
 
-    # ── Log detection ───────────────────────
+    recs = generate_recommendation(weather, mask, glasses, forecast)
+
+    uv_label, uv_class = uv_category(weather.get("uv_index", 0))
+
+    users = get_all_users()
+    profile = next((u for u in users if u["name"] == name), {})
+
     try:
         log_detection(name, mask, glasses, weather)
+
+        # ✅ WebSocket emit
+        socketio.emit("new_detection", {
+            "name": name,
+            "mask": mask,
+            "glasses": glasses,
+            "city": weather.get("city"),
+            "temp": weather.get("temp"),
+            "time": datetime.now().strftime("%H:%M:%S")
+        })
+
     except Exception as e:
-        print("[Detail] Log error:", e)
+        print("[Detail Error]", e)
 
     return render_template(
         "detail.html",
         name=name,
         profile=profile,
-        acc={"mask": mask, "glasses": glasses},
         weather=weather,
-        forecast=forecast,
         recs=recs,
+        forecast=forecast,
         uv_label=uv_label,
         uv_class=uv_class,
         admin_logged_in=_is_admin(),
     )
 
-
-# ── Admin routes ──────────────────────────────────────────────────
+# ── ADMIN ─────────────────────────────
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
-        pwd = request.form.get("password", "")
-        if pwd == ADMIN_PASSWORD:
-            session["admin"]       = True
+        if request.form.get("password") == ADMIN_PASSWORD:
+            session["admin"] = True
             session["last_active"] = datetime.now().isoformat()
-            log_audit("ADMIN_LOGIN", "Admin logged in", request.remote_addr)
+            broadcast_analytics()
             return redirect(url_for("admin_dashboard"))
-        flash("Incorrect password. Try again.", "danger")
-    return render_template("login.html", admin_logged_in=False)
 
-
-@app.route("/admin/logout")
-def admin_logout():
-    if session.get("admin"):
-        log_audit("ADMIN_LOGOUT", "Admin logged out", request.remote_addr)
-    session.clear()
-    flash("You have been logged out.", "info")
-    return redirect(url_for("index"))
+    return render_template("login.html")
 
 
 @app.route("/admin/dashboard")
+@admin_required
 def admin_dashboard():
-    try:
-        # Fetch data safely
-        users = get_users() or []
-        history = get_history() or []
-        audit = get_audit_logs() or []
+    users = get_all_users()
+    history = get_detection_history()
+    audit = get_audit_log()
 
-        # Ensure correct structure
-        users = [
-            {
-                "name": u.get("name"),
-                "registered_on": u.get("registered_on"),
-                "notes": u.get("notes"),
-                "detection_count": u.get("detection_count", 0),
-            }
-            for u in users
-        ]
+    return render_template(
+        "admin.html",
+        users=users,
+        history=history,
+        audit=audit
+    )
 
-        history = [
-            {
-                "name": h.get("name"),
-                "timestamp": h.get("timestamp"),
-                "mask": h.get("mask"),
-                "glasses": h.get("glasses"),
-                "city": h.get("city"),
-                "temp": h.get("temp"),
-                "aqi": h.get("aqi"),
-                "aqi_label": h.get("aqi_label"),
-                "uv_index": h.get("uv_index"),
-            }
-            for h in history
-        ]
-
-        audit = [
-            {
-                "event": a.get("event"),
-                "detail": a.get("detail"),
-                "ip": a.get("ip"),
-                "timestamp": a.get("timestamp"),
-            }
-            for a in audit
-        ]
-
-        return render_template(
-            "admin.html",
-            users=users,
-            history=history,
-            audit=audit
-        )
-
-    except Exception as e:
-        print("[ADMIN ERROR]", str(e))
-        return "Internal Server Error", 500
 
 @app.route("/admin/user/<name>/delete", methods=["POST"])
 @admin_required
 def delete_user(name):
-    # Remove encoding from HF Space
-    try:
-        requests.delete(f"{HF_SPACE_URL}/user/{name}", timeout=10)
-    except Exception as e:
-        print(f"[HF] delete user error: {e}")
     delete_user_from_db(name)
-    log_audit("DELETE_USER", f"User '{name}' deleted", request.remote_addr)
-    flash(f"User '{name}' deleted successfully.", "success")
     return redirect(url_for("admin_dashboard"))
 
+# ── RUN ─────────────────────────────
 
-@app.route("/admin/export_csv")
-@admin_required
-def export_csv():
-    users  = get_all_users()
-    buf    = io.StringIO()
-    fields = ["name", "registered_on", "notes", "detection_count"]
-    writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
-    writer.writeheader()
-    writer.writerows(users)
-    buf.seek(0)
-    log_audit("EXPORT_CSV", "Admin exported registered users CSV", request.remote_addr)
-    return Response(
-        buf.getvalue(),
-        mimetype="text/csv",
-        headers={"Content-Disposition": "attachment; filename=registered_users.csv"},
-    )
-
-
-@app.route("/admin/history_json")
-@admin_required
-def history_json():
-    name    = request.args.get("name")
-    history = get_detection_history(name=name or None, limit=100)
-    return jsonify(history)
-
-
-# Session heartbeat — called every minute from JS to reset timeout
-@app.route("/admin/heartbeat", methods=["POST"])
-@admin_required
-def heartbeat():
-    return jsonify({"ok": True})
-
-
-# ── Keepalive — start HuggingFace Space ping thread ──────────────
-# Imported here so it runs once when gunicorn loads the app module.
-try:
-     import sys, os
-     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "hf_space"))
-     from keepalive import start_keepalive
-     start_keepalive(ping_hf=True, ping_render=False)
-except Exception as _ke:
-     print("[App] Keepalive not started: {}".format(_ke))
+if __name__ == "__main__":
+    socketio.run(app, host="0.0.0.0", port=5000)
