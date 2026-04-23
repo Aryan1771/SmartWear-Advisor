@@ -1,76 +1,68 @@
-# hf_space/keepalive.py
-# Runs as a background thread inside the Render process.
-# Sends an authenticated GET /ping to the private HuggingFace Space 
-# every 20 minutes to prevent the Space from going to sleep.
-
+#Render
+#keepalive.py
 import os
 import threading
 import time
 import requests
 
-# Configuration from Environment Variables
-HF_SPACE_URL    = os.getenv("HF_SPACE_URL", "").rstrip("/")
-HF_TOKEN        = os.getenv("HF_TOKEN")  # Your hf_... access token
-PING_INTERVAL_S = 20 * 60                # 20 minutes
-PING_TIMEOUT_S  = 15
+HF_SPACE_URL = os.getenv("HF_SPACE_URL", "").rstrip("/")
+RENDER_URL   = os.getenv("RENDER_URL", "").rstrip("/")
+HF_TOKEN     = os.getenv("HF_TOKEN", "")
 
-_started        = False
-_lock           = threading.Lock()
+HF_PING_INTERVAL     = 20 * 60
+RENDER_PING_INTERVAL = 10 * 60
+PING_TIMEOUT         = 15
 
-def _ping_loop():
-    """Background loop that executes the ping."""
+_started = False
+_lock    = threading.Lock()
+
+
+def _ping_hf_loop():
     while True:
-        # Wait at the start of the loop
-        time.sleep(PING_INTERVAL_S)
-        
+        time.sleep(HF_PING_INTERVAL)
         if not HF_SPACE_URL:
-            print("[Keepalive] Error: HF_SPACE_URL is empty. Skipping ping.")
             continue
-
         try:
-            # Prepare Authorization header for Private Repo access
             headers = {}
             if HF_TOKEN:
-                headers["Authorization"] = f"Bearer {HF_TOKEN}"
-            else:
-                print("[Keepalive] Warning: HF_TOKEN not set. Pings to private spaces may fail.")
+                headers["Authorization"] = "Bearer {}".format(HF_TOKEN)
 
-            # Execute the ping
-            response = requests.get(
-                f"{HF_SPACE_URL}/ping", 
-                headers=headers, 
-                timeout=PING_TIMEOUT_S
+            r = requests.get(
+                "{}/ping".format(HF_SPACE_URL),
+                headers=headers,
+                timeout=PING_TIMEOUT,
             )
-            
-            # Log the result
-            if response.status_code == 200:
-                print(f"[Keepalive] Success: HF Space is awake → {response.json()}")
-            else:
-                print(f"[Keepalive] Warning: HF ping returned {response.status_code}. Space might be private or offline.")
-
+            print("[Keepalive] HF → {}".format(r.status_code))
         except Exception as e:
-            print(f"[Keepalive] Critical: HF ping failed due to network/error: {e}")
+            print("[Keepalive] HF ping failed: {}".format(e))
 
-def start_keepalive():
-    """
-    Initializes the keepalive thread. 
-    Call this once in your main app.py startup.
-    """
+
+def _ping_render_loop():
+    while True:
+        time.sleep(RENDER_PING_INTERVAL)
+        if not RENDER_URL:
+            continue
+        try:
+            r = requests.get(
+                "{}/ping".format(RENDER_URL),
+                timeout=PING_TIMEOUT,
+            )
+            print("[Keepalive] Render → {}".format(r.status_code))
+        except Exception as e:
+            print("[Keepalive] Render ping failed: {}".format(e))
+
+
+def start_keepalive(ping_hf=True, ping_render=False):
     global _started
     with _lock:
         if _started:
             return
-        
-        if not HF_SPACE_URL:
-            print("[Keepalive] HF_SPACE_URL not set — Keepalive disabled.")
-            return
-
-        # Create a daemon thread so it closes when the main app closes
-        t = threading.Thread(target=_ping_loop, daemon=True, name="hf-keepalive")
-        t.start()
         _started = True
-        
-        mask_token = f"{HF_TOKEN[:5]}***" if HF_TOKEN else "None"
-        print(f"[Keepalive] System Active.")
-        print(f"[Keepalive] Target: {HF_SPACE_URL}/ping")
-        print(f"[Keepalive] Auth: Token {mask_token} loaded.")
+
+        if ping_hf and HF_SPACE_URL:
+            threading.Thread(target=_ping_hf_loop, daemon=True).start()
+            print("[Keepalive] Render → HF active")
+
+        if ping_render and RENDER_URL:
+            threading.Thread(target=_ping_render_loop, daemon=True).start()
+            print("[Keepalive] HF → Render active")
