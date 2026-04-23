@@ -404,14 +404,20 @@ function handleRecognitionSuccess(data) {
 function beginRegistration() {
   const name = prompt('Enter the name for this face:');
   if (!name || !name.trim()) return;
+
   pendingRegName = name.trim();
 
-  // Start MediaPipe liveness challenge
-  document.getElementById('liveness-overlay').style.display = 'flex';
   blinkDetected = false;
   blinkFrames   = 0;
   prevEAR       = 1.0;
   livenessActive = true;
+
+  const overlay = document.getElementById('liveness-overlay');
+  overlay.style.display = 'flex';
+
+  document.getElementById('liveness-msg').textContent =
+    'Blink slowly once (auto-continue in 5 sec)';
+
   startLiveness();
 }
 
@@ -436,9 +442,10 @@ function calcEAR(lm, indices) {
 }
 
 function startLiveness() {
+  // If MediaPipe failed → fallback immediately
   if (!window.FaceMesh) {
-    // MediaPipe not loaded — skip liveness, go straight to capture
-    document.getElementById('liveness-msg').textContent = 'Blink check unavailable — capturing…';
+    console.warn("FaceMesh not loaded — skipping liveness");
+    document.getElementById('liveness-msg').textContent = 'Liveness unavailable — capturing…';
     setTimeout(captureAndRegister, 1200);
     return;
   }
@@ -449,59 +456,72 @@ function startLiveness() {
   });
 
   faceMesh.setOptions({
-    maxNumFaces:         1,
-    refineLandmarks:     true,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence:  0.5,
+    maxNumFaces: 1,
+    refineLandmarks: true,
+    minDetectionConfidence: 0.4,
+    minTrackingConfidence: 0.4,
   });
 
   faceMesh.onResults(results => {
     if (!livenessActive || blinkDetected) return;
-    if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return;
+
+    if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
+      console.log("No face detected");
+      return;
+    }
 
     const lm = results.multiFaceLandmarks[0];
 
-    // Left eye EAR landmarks (MediaPipe face mesh)
     const leftEAR  = calcEAR(lm, [33, 160, 158, 133, 153, 144]);
     const rightEAR = calcEAR(lm, [362, 385, 387, 263, 373, 380]);
-    const ear      = (leftEAR + rightEAR) / 2;
-
-    const EAR_BLINK_THRESH = 0.2;
-    const EAR_OPEN_THRESH  = 0.25;
+    const ear = (leftEAR + rightEAR) / 2;
+    console.log("EAR:", ear);
+    const EAR_BLINK_THRESH = 0.23;
+    const EAR_OPEN_THRESH  = 0.27;
 
     if (prevEAR > EAR_OPEN_THRESH && ear < EAR_BLINK_THRESH) {
       blinkFrames++;
     }
+
     if (blinkFrames >= 1 && ear > EAR_OPEN_THRESH && prevEAR < EAR_BLINK_THRESH) {
-      // Blink completed
       blinkDetected = true;
       livenessActive = false;
-      faceMesh.close(); faceMesh = null;
+
+      if (faceMesh) { faceMesh.close(); faceMesh = null; }
 
       const ring = document.getElementById('liveness-ring');
       ring.classList.add('success');
-      document.getElementById('liveness-msg').textContent = '✓ Blink confirmed — capturing…';
-      setTimeout(captureAndRegister, 700);
+
+      document.getElementById('liveness-msg').textContent =
+        '✓ Blink confirmed — capturing…';
+
+      setTimeout(captureAndRegister, 600);
     }
+
     prevEAR = ear;
   });
-
-  // Feed frames to MediaPipe from the webcam
   (function sendFrame() {
     if (!livenessActive || blinkDetected) return;
+
     if (video.readyState >= video.HAVE_ENOUGH_DATA) {
       faceMesh.send({ image: video }).catch(() => {});
     }
+
     requestAnimationFrame(sendFrame);
   })();
   setTimeout(() => {
     if (!blinkDetected && livenessActive) {
-      console.warn("Blink not detected — fallback triggered");
+      console.warn("Blink timeout — forcing registration");
+
       livenessActive = false;
       if (faceMesh) { faceMesh.close(); faceMesh = null; }
-      captureAndRegister();
+
+      document.getElementById('liveness-msg').textContent =
+        'No blink detected — continuing…';
+
+      setTimeout(captureAndRegister, 500);
     }
-  }, 5000);
+  }, 5000); // 5 sec fallback
 }
 
 async function captureAndRegister() {
