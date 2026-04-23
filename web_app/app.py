@@ -246,5 +246,5 @@ try:
      sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "hf_space"))
      from keepalive import start_keepalive
      start_keepalive(ping_hf=True, ping_render=False)
- except Exception as _ke:
+except Exception as _ke:
      print("[App] Keepalive not started: {}".format(_ke))
