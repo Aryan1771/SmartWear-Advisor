@@ -106,50 +106,68 @@ def register_remote():
         log_audit("REGISTRATION", f"User '{name}' registered", request.remote_addr)
     return jsonify(result if result else {"success": False, "message": "Backend Unreachable"})
 
-
 @app.route("/detail/<name>")
 def detail(name):
     lat     = request.args.get("lat")
     lon     = request.args.get("lon")
     city    = request.args.get("city", "Ghaziabad")
-    mask    = request.args.get("mask",    "No Mask")
+    mask    = request.args.get("mask", "No Mask")
     glasses = request.args.get("glasses", "No Glasses")
 
-    # Weather (use GPS coords if available, else city name)
-    query   = f"{lat},{lon}" if lat and lat not in ("null", "None", "") else city
-    weather = get_weather(query)
+    # ── Weather ─────────────────────────────
+    query = f"{lat},{lon}" if lat and lat not in ("null", "None", "") else city
+    weather = get_weather(query) or {}
 
-    # Hourly forecast (Open-Meteo)
-    w_lat    = weather.get("lat") or lat
-    w_lon    = weather.get("lon") or lon
-    forecast = get_hourly_forecast(w_lat, w_lon)
+    # ── Forecast ────────────────────────────
+    w_lat = weather.get("lat") or lat
+    w_lon = weather.get("lon") or lon
 
-    # Recommendations
-    recs = generate_recommendation(weather, mask, glasses, forecast)
+    if w_lat and w_lon:
+        forecast = get_hourly_forecast(w_lat, w_lon)
+    else:
+        forecast = []
 
-    # UV label
-    uv_label, uv_class = uv_category(weather.get("uv_index", 0))
+    # ── Recommendations ─────────────────────
+    try:
+        recs = generate_recommendation(weather, mask, glasses, forecast)
+    except Exception as e:
+        print("[Detail] Recommendation error:", e)
+        recs = []
 
-    # User profile from DB
-    users   = get_all_users()
-    profile = next((u for u in users if u.get("name") == name),
-                   {"registered_on": "N/A", "notes": "Mobile Registration",
-                    "detection_count": 0})
+    # ── UV ──────────────────────────────────
+    try:
+        uv_label, uv_class = uv_category(weather.get("uv_index", 0))
+    except:
+        uv_label, uv_class = "Unknown", "low"
 
-    # Log this detection
-    log_detection(name, mask, glasses, weather)
+    # ── Profile ─────────────────────────────
+    users = get_all_users()
+    profile = next(
+        (u for u in users if u.get("name") == name),
+        {
+            "registered_on": "N/A",
+            "notes": "Mobile Registration",
+            "detection_count": 0
+        }
+    )
+
+    # ── Log detection ───────────────────────
+    try:
+        log_detection(name, mask, glasses, weather)
+    except Exception as e:
+        print("[Detail] Log error:", e)
 
     return render_template(
         "detail.html",
-        name          = name,
-        profile       = profile,
-        acc           = {"mask": mask, "glasses": glasses},
-        weather       = weather,
-        forecast      = forecast,
-        recs          = recs,
-        uv_label      = uv_label,
-        uv_class      = uv_class,
-        admin_logged_in = _is_admin(),
+        name=name,
+        profile=profile,
+        acc={"mask": mask, "glasses": glasses},
+        weather=weather,
+        forecast=forecast,
+        recs=recs,
+        uv_label=uv_label,
+        uv_class=uv_class,
+        admin_logged_in=_is_admin(),
     )
 
 
