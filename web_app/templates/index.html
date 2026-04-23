@@ -417,7 +417,9 @@ function beginRegistration() {
 
   document.getElementById('liveness-msg').textContent =
     'Blink slowly once (auto-continue in 5 sec)';
-
+  if (!window.FaceMesh) {
+    console.error("FaceMesh failed to load!");
+  }
   startLiveness();
 }
 
