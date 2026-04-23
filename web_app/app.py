@@ -209,19 +209,59 @@ def admin_logout():
 
 
 @app.route("/admin/dashboard")
-@admin_required
 def admin_dashboard():
-    users   = get_all_users()
-    history = get_detection_history(limit=50)
-    audit   = get_audit_log(limit=30)
-    return render_template(
-        "admin.html",
-        users           = users,
-        history         = history,
-        audit           = audit,
-        admin_logged_in = True,
-    )
+    try:
+        # Fetch data safely
+        users = get_users() or []
+        history = get_history() or []
+        audit = get_audit_logs() or []
 
+        # Ensure correct structure
+        users = [
+            {
+                "name": u.get("name"),
+                "registered_on": u.get("registered_on"),
+                "notes": u.get("notes"),
+                "detection_count": u.get("detection_count", 0),
+            }
+            for u in users
+        ]
+
+        history = [
+            {
+                "name": h.get("name"),
+                "timestamp": h.get("timestamp"),
+                "mask": h.get("mask"),
+                "glasses": h.get("glasses"),
+                "city": h.get("city"),
+                "temp": h.get("temp"),
+                "aqi": h.get("aqi"),
+                "aqi_label": h.get("aqi_label"),
+                "uv_index": h.get("uv_index"),
+            }
+            for h in history
+        ]
+
+        audit = [
+            {
+                "event": a.get("event"),
+                "detail": a.get("detail"),
+                "ip": a.get("ip"),
+                "timestamp": a.get("timestamp"),
+            }
+            for a in audit
+        ]
+
+        return render_template(
+            "admin.html",
+            users=users,
+            history=history,
+            audit=audit
+        )
+
+    except Exception as e:
+        print("[ADMIN ERROR]", str(e))
+        return "Internal Server Error", 500
 
 @app.route("/admin/user/<name>/delete", methods=["POST"])
 @admin_required
