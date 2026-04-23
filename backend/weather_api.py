@@ -67,12 +67,17 @@ def get_weather(query) -> dict:
         # ── UV Index ─────────────────────────────────────────────
         try:
             uv = requests.get(
-                "https://api.openweathermap.org/data/2.5/uvi",
-                params={"lat": lat, "lon": lon, "appid": OWM_KEY},
+                "https://api.openweathermap.org/data/3.0/onecall",
+                params={
+                    "lat": lat,
+                    "lon": lon,
+                    "appid": OWM_KEY,
+                    "exclude": "minutely,hourly,daily,alerts",
+                },
                 timeout=5,
             )
             uv.raise_for_status()
-            result["uv_index"] = round(float(uv.json().get("value", 0)), 1)
+            result["uv_index"] = round(float(uv.json().get("current", {}).get("uvi", 0)), 1)
         except Exception as e:
             print(f"[Weather] UV error: {e}")
 
