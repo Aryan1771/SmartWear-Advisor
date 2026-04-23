@@ -1,73 +1,64 @@
-import os, io, csv
+import os, time, logging
 import requests
 from flask import (
     Flask, render_template, request, jsonify,
-    session, redirect, url_for, Response, flash,
+    session, redirect, url_for
 )
 from datetime import datetime
 from functools import wraps
-
-# ✅ WebSocket
 from flask_socketio import SocketIO
 
-from backend.weather_api import (
-    get_weather,
-    get_hourly_forecast,
-    uv_category,
-)
+from backend.weather_api import get_weather, get_hourly_forecast, uv_category
 from backend.recommendation_engine import generate_recommendation
-
 from backend.db import (
-    init_db,
-    add_user_to_db,
-    log_audit,
-    get_all_users,
-    get_detection_history,
-    get_audit_log,
-    log_detection,
-    delete_user_from_db
+    init_db, add_user_to_db, log_audit,
+    get_all_users, get_detection_history,
+    get_audit_log, log_detection, delete_user_from_db
 )
 
+# ── INIT ─────────────────────────────
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "smartwear-secure-key")
 
-# ✅ SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# Config
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("APP")
+
 HF_SPACE_URL = os.getenv("HF_SPACE_URL", "").rstrip("/")
 HF_TOKEN = os.getenv("HF_TOKEN")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+
 SESSION_TIMEOUT = 30 * 60
 
 init_db()
 
-# ── Helpers ─────────────────────────────
+# ── GLOBAL CONTROL ───────────────────
+_last_request_time = 0
+REQUEST_INTERVAL = 1.2 
 
-def broadcast_analytics():
-    history = get_detection_history(limit=200) or []
-    total = len(history)
-    mask = sum(1 for h in history if h.get("mask") == "Mask")
+_last_result = None
+_cache_time = 0
+CACHE_TTL = 2  # seconds
 
-    socketio.emit("analytics_update", {
-        "total": total,
-        "mask_rate": (mask / total * 100) if total else 0
-    })
 
+# ── HELPERS ──────────────────────────
 
 def _hf(endpoint: str, payload: dict):
     try:
         headers = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
+
         r = requests.post(
             f"{HF_SPACE_URL}{endpoint}",
             json=payload,
             headers=headers,
-            timeout=35,
+            timeout=10,
         )
         r.raise_for_status()
         return r.json()
+
     except Exception as e:
-        print(f"[HF ERROR] {e}")
+        logger.error(f"[HF ERROR] {e}")
         return None
 
 
@@ -92,7 +83,8 @@ def admin_required(f):
 def _is_admin():
     return bool(session.get("admin"))
 
-# ── ROUTES ─────────────────────────────
+
+# ── ROUTES ───────────────────────────
 
 @app.route("/")
 def index():
@@ -101,9 +93,33 @@ def index():
 
 @app.route("/process_remote_frame", methods=["POST"])
 def process_remote_frame():
+    global _last_request_time, _last_result, _cache_time
+
+    now = time.time()
+
+    if now - _last_request_time < REQUEST_INTERVAL:
+        return jsonify(_last_result or {"name": "Processing"})
+
+    _last_request_time = now
+
     data = request.json or {}
-    result = _hf("/detect", {"image": data.get("image", "")})
-    return jsonify(result or {"name": "Unknown"})
+    image = data.get("image", "")
+
+    if not image or len(image) < 100:
+        return jsonify({"name": "No Face", "error": "invalid_image"})
+
+    if _last_result and (now - _cache_time < CACHE_TTL):
+        return jsonify(_last_result)
+
+    result = _hf("/detect", {"image": image})
+
+    if not result:
+        result = {"name": "Unknown", "mask": "Unknown", "glasses": "Unknown"}
+
+    _last_result = result
+    _cache_time = now
+
+    return jsonify(result)
 
 
 @app.route("/register_remote", methods=["POST"])
@@ -113,7 +129,7 @@ def register_remote():
     image = data.get("image", "")
 
     if not name or not image:
-        return jsonify({"success": False})
+        return jsonify({"success": False, "error": "invalid_input"})
 
     result = _hf("/register", {"image": image, "name": name})
 
@@ -126,31 +142,29 @@ def register_remote():
 
 @app.route("/detail/<name>")
 def detail(name):
-    lat = request.args.get("lat")
-    lon = request.args.get("lon")
-    city = request.args.get("city", "Delhi")
-    mask = request.args.get("mask", "No Mask")
-    glasses = request.args.get("glasses", "No Glasses")
-
-    query = f"{lat},{lon}" if lat else city
-    weather = get_weather(query) or {}
-
-    forecast = get_hourly_forecast(
-        weather.get("lat"),
-        weather.get("lon")
-    ) if weather.get("lat") else []
-
-    recs = generate_recommendation(weather, mask, glasses, forecast)
-
-    uv_label, uv_class = uv_category(weather.get("uv_index", 0))
-
-    users = get_all_users()
-    profile = next((u for u in users if u["name"] == name), {})
-
     try:
+        lat = request.args.get("lat")
+        lon = request.args.get("lon")
+        city = request.args.get("city", "Delhi")
+        mask = request.args.get("mask", "No Mask")
+        glasses = request.args.get("glasses", "No Glasses")
+
+        query = f"{lat},{lon}" if lat else city
+        weather = get_weather(query)
+
+        forecast = get_hourly_forecast(
+            weather.get("lat"),
+            weather.get("lon")
+        ) if weather.get("lat") else []
+
+        recs = generate_recommendation(weather, mask, glasses, forecast)
+        uv_label, uv_class = uv_category(weather.get("uv_index", 0))
+
+        users = get_all_users()
+        profile = next((u for u in users if u["name"] == name), {})
+
         log_detection(name, mask, glasses, weather)
 
-        # 🔥 REAL-TIME EVENT
         socketio.emit("new_detection", {
             "name": name,
             "mask": mask,
@@ -162,24 +176,24 @@ def detail(name):
             "time": datetime.now().strftime("%H:%M:%S")
         })
 
-        broadcast_analytics()
+        return render_template(
+            "detail.html",
+            name=name,
+            profile=profile,
+            weather=weather,
+            recs=recs,
+            forecast=forecast,
+            uv_label=uv_label,
+            uv_class=uv_class,
+            admin_logged_in=_is_admin(),
+        )
 
     except Exception as e:
-        print("[Detail Error]", e)
+        logger.error(f"[DETAIL ERROR] {e}")
+        return "Error loading page", 500
 
-    return render_template(
-        "detail.html",
-        name=name,
-        profile=profile,
-        weather=weather,
-        recs=recs,
-        forecast=forecast,
-        uv_label=uv_label,
-        uv_class=uv_class,
-        admin_logged_in=_is_admin(),
-    )
 
-# ── ADMIN ─────────────────────────────
+# ── ADMIN ───────────────────────────
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
@@ -187,7 +201,6 @@ def admin_login():
         if request.form.get("password") == ADMIN_PASSWORD:
             session["admin"] = True
             session["last_active"] = datetime.now().isoformat()
-            broadcast_analytics()
             return redirect(url_for("admin_dashboard"))
 
     return render_template("login.html")
@@ -202,34 +215,6 @@ def admin_dashboard():
         history=get_detection_history(),
         audit=get_audit_log()
     )
-
-
-@app.route("/admin/analytics")
-@admin_required
-def analytics():
-    history = get_detection_history(limit=500) or []
-
-    by_day = {}
-    mask_count = {"Mask": 0, "No Mask": 0}
-    glasses_count = {"Glasses": 0, "No Glasses": 0}
-
-    for h in history:
-        ts = h.get("timestamp")
-        if ts:
-            day = str(ts)[:10]
-            by_day[day] = by_day.get(day, 0) + 1
-
-        mask_count[h.get("mask", "No Mask")] += 1
-        glasses_count[h.get("glasses", "No Glasses")] += 1
-
-    days = sorted(by_day.keys())
-
-    return jsonify({
-        "days": days,
-        "detections": [by_day[d] for d in days],
-        "mask": mask_count,
-        "glasses": glasses_count
-    })
 
 
 @app.route("/admin/user/<name>/delete", methods=["POST"])
