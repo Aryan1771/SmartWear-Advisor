@@ -31,8 +31,8 @@ from backend.db import (
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "smartwear-secure-key")
 
-# ✅ SocketIO INIT
-socketio = SocketIO(app, cors_allowed_origins="*")
+# ✅ SocketIO
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # Config
 HF_SPACE_URL = os.getenv("HF_SPACE_URL", "").rstrip("/")
@@ -46,7 +46,6 @@ init_db()
 
 def broadcast_analytics():
     history = get_detection_history(limit=200) or []
-
     total = len(history)
     mask = sum(1 for h in history if h.get("mask") == "Mask")
 
@@ -68,13 +67,13 @@ def _hf(endpoint: str, payload: dict):
         r.raise_for_status()
         return r.json()
     except Exception as e:
-        print(f"[HF Proxy Error] {endpoint}: {e}")
+        print(f"[HF ERROR] {e}")
         return None
 
 
 def admin_required(f):
     @wraps(f)
-    def decorated(*args, **kwargs):
+    def wrapper(*args, **kwargs):
         if not session.get("admin"):
             return redirect(url_for("admin_login"))
 
@@ -87,13 +86,13 @@ def admin_required(f):
 
         session["last_active"] = datetime.now().isoformat()
         return f(*args, **kwargs)
-    return decorated
+    return wrapper
 
 
 def _is_admin():
     return bool(session.get("admin"))
 
-# ── Routes ─────────────────────────────
+# ── ROUTES ─────────────────────────────
 
 @app.route("/")
 def index():
@@ -104,7 +103,7 @@ def index():
 def process_remote_frame():
     data = request.json or {}
     result = _hf("/detect", {"image": data.get("image", "")})
-    return jsonify(result if result else {"name": "Unknown"})
+    return jsonify(result or {"name": "Unknown"})
 
 
 @app.route("/register_remote", methods=["POST"])
@@ -134,12 +133,12 @@ def detail(name):
     glasses = request.args.get("glasses", "No Glasses")
 
     query = f"{lat},{lon}" if lat else city
-    weather = get_weather(query)
+    weather = get_weather(query) or {}
 
     forecast = get_hourly_forecast(
         weather.get("lat"),
         weather.get("lon")
-    )
+    ) if weather.get("lat") else []
 
     recs = generate_recommendation(weather, mask, glasses, forecast)
 
@@ -151,15 +150,19 @@ def detail(name):
     try:
         log_detection(name, mask, glasses, weather)
 
-        # ✅ WebSocket emit
+        # 🔥 REAL-TIME EVENT
         socketio.emit("new_detection", {
             "name": name,
             "mask": mask,
             "glasses": glasses,
             "city": weather.get("city"),
             "temp": weather.get("temp"),
+            "aqi": weather.get("aqi_label"),
+            "uv": weather.get("uv_index"),
             "time": datetime.now().strftime("%H:%M:%S")
         })
+
+        broadcast_analytics()
 
     except Exception as e:
         print("[Detail Error]", e)
@@ -193,16 +196,40 @@ def admin_login():
 @app.route("/admin/dashboard")
 @admin_required
 def admin_dashboard():
-    users = get_all_users()
-    history = get_detection_history()
-    audit = get_audit_log()
-
     return render_template(
         "admin.html",
-        users=users,
-        history=history,
-        audit=audit
+        users=get_all_users(),
+        history=get_detection_history(),
+        audit=get_audit_log()
     )
+
+
+@app.route("/admin/analytics")
+@admin_required
+def analytics():
+    history = get_detection_history(limit=500) or []
+
+    by_day = {}
+    mask_count = {"Mask": 0, "No Mask": 0}
+    glasses_count = {"Glasses": 0, "No Glasses": 0}
+
+    for h in history:
+        ts = h.get("timestamp")
+        if ts:
+            day = str(ts)[:10]
+            by_day[day] = by_day.get(day, 0) + 1
+
+        mask_count[h.get("mask", "No Mask")] += 1
+        glasses_count[h.get("glasses", "No Glasses")] += 1
+
+    days = sorted(by_day.keys())
+
+    return jsonify({
+        "days": days,
+        "detections": [by_day[d] for d in days],
+        "mask": mask_count,
+        "glasses": glasses_count
+    })
 
 
 @app.route("/admin/user/<name>/delete", methods=["POST"])
@@ -210,6 +237,7 @@ def admin_dashboard():
 def delete_user(name):
     delete_user_from_db(name)
     return redirect(url_for("admin_dashboard"))
+
 
 # ── RUN ─────────────────────────────
 
