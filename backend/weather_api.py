@@ -190,6 +190,11 @@ def get_weather(lat=None, lon=None, query=None) -> dict:
 
 def get_six_day_forecast(lat, lon) -> list:
     if _round_coord(lat) is None or _round_coord(lon) is None:
+        logger.warning(
+            "Forecast unavailable because coordinates are missing or invalid. lat=%s lon=%s",
+            lat,
+            lon,
+        )
         return []
 
     cache_key = f"forecast:{_round_coord(lat)}:{_round_coord(lon)}"
@@ -233,7 +238,12 @@ def get_six_day_forecast(lat, lon) -> list:
         _set_cached(cache_key, forecast)
         return forecast
     except Exception as exc:
-        logger.warning("Forecast fetch failed: %s", exc)
+        logger.warning(
+            "Forecast fetch failed for lat=%s lon=%s: %s",
+            _round_coord(lat),
+            _round_coord(lon),
+            exc,
+        )
         return []
 
 

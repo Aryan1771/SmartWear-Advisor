@@ -1,15 +1,17 @@
 import { initAppShell, loadSidebarWeather, setLocationStatus, setStatus, showToast } from "/static/js/ui.js";
 
 const CAMERA = {
-  width: 360,
-  height: 480,
-  jpegQuality: 0.62,
-  registerQuality: 0.72,
-  requestIntervalMs: 900,
-  unknownStopMs: 6000,
-  requestTimeoutMs: 4000,
+  width: 480,
+  height: 640,
+  jpegQuality: 0.82,
+  registerQuality: 0.92,
+  requestIntervalMs: 1000,
+  unknownStopMs: 7000,
+  requestTimeoutMs: 5000,
   registrationTimeoutMs: 12000,
 };
+
+const SCAN_WINDOW_SECONDS = Math.round(CAMERA.unknownStopMs / 1000);
 
 const state = {
   mode: "idle",
@@ -179,7 +181,7 @@ async function detectFrame() {
 
     if (performance.now() - state.recognitionStartedAt >= CAMERA.unknownStopMs) {
       haltRecognition();
-      showToast("Face not recognized in time. Press Register to enroll and resume.", "warning");
+      showToast(`Face not recognized after ${SCAN_WINDOW_SECONDS} seconds. Press Register to enroll and resume.`, "warning");
       return;
     }
 
@@ -198,7 +200,7 @@ function haltRecognition() {
   stopTracks();
   state.processing = false;
   setMode("halted");
-  setStatus("Recognition paused after 2 seconds. Press Register to continue.", "warning");
+  setStatus(`Recognition paused after ${SCAN_WINDOW_SECONDS} seconds. Press Register to continue.`, "warning");
   drawGuide();
 }
 
@@ -257,8 +259,8 @@ async function startCamera() {
     state.stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "user",
-        width: { ideal: 720 },
-        height: { ideal: 960 },
+        width: { ideal: 960 },
+        height: { ideal: 1280 },
       },
       audio: false,
     });
