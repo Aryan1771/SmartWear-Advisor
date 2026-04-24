@@ -1,17 +1,17 @@
 # ===================== weather.py =====================
 
+import os
 import requests
 
-API_KEY = "YOUR_OPENWEATHER_KEY"
-
+API_KEY = os.environ.get("OWM_API_KEY")
 
 def get_weather(lat, lon):
-    if not lat or not lon:
+    if not lat or not lon or not API_KEY:
         return {}
 
     try:
         url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric"
-        r = requests.get(url).json()
+        r = requests.get(url, timeout=5).json()
 
         return {
             "city": r.get("name"),
@@ -21,5 +21,6 @@ def get_weather(lat, lon):
             "aqi_label": "Moderate"
         }
 
-    except:
+    except Exception as e:
+        print("Weather error:", e)
         return {}
