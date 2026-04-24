@@ -120,7 +120,8 @@ export async function loadSidebarWeather(coords = null) {
 
   const status = widget.querySelector("[data-weather-status]");
   const city = widget.querySelector("[data-weather-city]");
-  const meta = widget.querySelector("[data-weather-meta]");
+  const metaPrimary = widget.querySelector("[data-weather-meta-primary]");
+  const metaSecondary = widget.querySelector("[data-weather-meta-secondary]");
 
   if (status) {
     status.textContent = "Loading local weather...";
@@ -147,15 +148,21 @@ export async function loadSidebarWeather(coords = null) {
     if (status) {
       status.textContent = `${payload.temp ?? "--"}°C · ${payload.condition || "Unavailable"}`;
     }
-    if (meta) {
-      meta.textContent = `Humidity ${payload.humidity ?? "--"}% · AQI ${payload.aqi_label || "--"} · UV ${payload.uv_index ?? "--"}`;
+    if (metaPrimary) {
+      metaPrimary.textContent = `Humidity ${payload.humidity ?? "--"}%`;
+    }
+    if (metaSecondary) {
+      metaSecondary.textContent = `AQI ${payload.aqi_label || "--"} · UV ${payload.uv_index ?? "--"}`;
     }
   } catch (error) {
     if (status) {
       status.textContent = "Weather temporarily unavailable.";
     }
-    if (meta) {
-      meta.textContent = "Using safe fallback data when needed.";
+    if (metaPrimary) {
+      metaPrimary.textContent = "Using safe fallback data when needed.";
+    }
+    if (metaSecondary) {
+      metaSecondary.textContent = "";
     }
   }
 }
