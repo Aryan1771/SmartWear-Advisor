@@ -20,7 +20,7 @@ SmartWear Advisor is a Flask web app that captures a face, sends lightweight fra
 
 - `SECRET_KEY`
 - `ADMIN_PASSWORD`
-- `HF_API_URL` or `HF_SPACE_URL`
+- `HF_API_URL` or `HF_SPACE_URL` set to the Hugging Face Space base URL
 - `HF_API_TOKEN` or `HF_TOKEN`
 - `OWM_API_KEY`
 - `TURSO_URL`

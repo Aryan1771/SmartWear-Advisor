@@ -16,7 +16,7 @@ from backend.db import (
 )
 from backend.recommendation_engine import generate_recommendation
 from backend.weather_api import get_weather_bundle
-from utils.inference import run_inference
+from utils.inference import register_face, run_inference
 
 BASE_DIR = Path(__file__).resolve().parent
 MAX_IMAGE_SIZE = 700_000
@@ -114,9 +114,37 @@ def register():
         return jsonify({"success": False, "error": "image_too_large"}), 413
 
     try:
-        add_user(name, image)
+        remote_result = register_face(name, image)
+        if not remote_result.get("success"):
+            log_audit(
+                "user_register_failed",
+                f"HF register failed for {name}: {remote_result.get('message', remote_result.get('error'))}",
+                _client_ip(),
+            )
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": remote_result.get("error", "register_failed"),
+                        "message": remote_result.get("message", "Face registration failed."),
+                    }
+                ),
+                502,
+            )
+
+        try:
+            add_user(name, image)
+        except Exception as metadata_exc:
+            print(f"[APP] local metadata register failed: {metadata_exc}")
+
         log_audit("user_registered", f"Registered {name}", _client_ip())
-        return jsonify({"success": True, "name": name})
+        return jsonify(
+            {
+                "success": True,
+                "name": name,
+                "message": remote_result.get("message", "Registered successfully."),
+            }
+        )
     except Exception as exc:
         print(f"[APP] register failed: {exc}")
         return jsonify({"success": False, "error": "register_failed"}), 500

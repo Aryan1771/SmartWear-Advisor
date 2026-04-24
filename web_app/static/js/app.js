@@ -310,16 +310,16 @@ async function registerUser() {
     );
     const payload = await response.json();
     if (!response.ok || !payload.success) {
-      throw new Error(payload.error || "register_failed");
+      throw new Error(payload.message || payload.error || "register_failed");
     }
 
-    showToast(`Registered ${payload.name} successfully.`, "success");
+    showToast(payload.message || `Registered ${payload.name} successfully.`, "success");
     setStatus("Registration complete. Press Start when you want to scan again.", "success");
     stopCamera();
   } catch (error) {
     setMode("halted");
     setStatus("Registration failed. You can retry safely.", "danger");
-    showToast("Registration failed. Please try again with a clearer frame.", "danger");
+    showToast(error.message || "Registration failed. Please try again with a clearer frame.", "danger");
   }
 }
 
