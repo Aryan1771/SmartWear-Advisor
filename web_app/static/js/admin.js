@@ -1,6 +1,7 @@
-import { initAppShell, scrollToSection } from "/static/js/ui.js";
+import { initAppShell, loadSidebarWeather, scrollToSection } from "/static/js/ui.js";
 
 initAppShell();
+void loadSidebarWeather();
 
 const payloadNode = document.getElementById("admin-payload");
 const payload = JSON.parse(payloadNode?.textContent || "{}");

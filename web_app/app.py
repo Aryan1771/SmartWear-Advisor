@@ -70,6 +70,30 @@ def ping():
     return jsonify({"ok": True, "service": "smartwear-web"})
 
 
+@app.route("/api/sidebar-weather")
+def sidebar_weather():
+    try:
+        lat = float(request.args.get("lat", ""))
+        lon = float(request.args.get("lon", ""))
+    except (TypeError, ValueError):
+        lat, lon = None, None
+
+    city = request.args.get("city")
+
+    bundle = get_weather_bundle(lat=lat, lon=lon, query=city)
+    current = bundle["current"]
+    return jsonify(
+        {
+            "city": current.get("city", "Unknown"),
+            "temp": current.get("temp"),
+            "condition": current.get("description") or current.get("condition", "Unavailable"),
+            "humidity": current.get("humidity"),
+            "aqi_label": current.get("aqi_label"),
+            "uv_index": current.get("uv_index"),
+        }
+    )
+
+
 @app.route("/")
 def home():
     return render_template("home.html")

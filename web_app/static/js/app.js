@@ -1,13 +1,14 @@
-import { initAppShell, setLocationStatus, setStatus, showToast } from "/static/js/ui.js";
+import { initAppShell, loadSidebarWeather, setLocationStatus, setStatus, showToast } from "/static/js/ui.js";
 
 const CAMERA = {
   width: 360,
   height: 480,
   jpegQuality: 0.62,
   registerQuality: 0.72,
-  requestIntervalMs: 700,
-  unknownStopMs: 2000,
-  requestTimeoutMs: 1800,
+  requestIntervalMs: 900,
+  unknownStopMs: 6000,
+  requestTimeoutMs: 4000,
+  registrationTimeoutMs: 12000,
 };
 
 const state = {
@@ -241,9 +242,11 @@ async function requestLocation() {
       state.coords.lat = Number(position.coords.latitude.toFixed(6));
       state.coords.lon = Number(position.coords.longitude.toFixed(6));
       setLocationStatus("Location locked for weather-aware recommendations.");
+      void loadSidebarWeather(state.coords);
     },
     () => {
       setLocationStatus("Location blocked. Weather details will use safe fallback data.");
+      void loadSidebarWeather();
     },
     { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
   );
@@ -306,7 +309,7 @@ async function registerUser() {
           image: captureFrame(CAMERA.registerQuality),
         }),
       },
-      2200
+      CAMERA.registrationTimeoutMs
     );
     const payload = await response.json();
     if (!response.ok || !payload.success) {
@@ -348,3 +351,4 @@ bindEvents();
 updateIdentity();
 drawGuide();
 updateActionState();
+void loadSidebarWeather();

@@ -155,6 +155,38 @@ select {
   color: var(--muted);
 }
 
+.sidebar-weather {
+  margin: 1rem 0 1.1rem;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(92, 214, 255, 0.06);
+}
+
+.sidebar-weather-city,
+.sidebar-weather-meta {
+  margin: 0;
+}
+
+.sidebar-weather-city {
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.sidebar-weather-status {
+  display: block;
+  margin: 0.45rem 0;
+  color: var(--text);
+}
+
+.sidebar-weather-meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .page {
   padding: 1.5rem 1.5rem 2rem;
 }

@@ -111,3 +111,51 @@ export function initAppShell() {
   bindChrome();
   bindInstallPrompt();
 }
+
+export async function loadSidebarWeather(coords = null) {
+  const widget = document.querySelector("[data-sidebar-weather]");
+  if (!widget) {
+    return;
+  }
+
+  const status = widget.querySelector("[data-weather-status]");
+  const city = widget.querySelector("[data-weather-city]");
+  const meta = widget.querySelector("[data-weather-meta]");
+
+  if (status) {
+    status.textContent = "Loading local weather...";
+  }
+
+  const params = new URLSearchParams();
+  if (coords?.lat != null && coords?.lon != null) {
+    params.set("lat", String(coords.lat));
+    params.set("lon", String(coords.lon));
+  }
+
+  const url = `/api/sidebar-weather${params.toString() ? `?${params.toString()}` : ""}`;
+
+  try {
+    const response = await fetch(url);
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error("weather_failed");
+    }
+
+    if (city) {
+      city.textContent = payload.city || "Unknown";
+    }
+    if (status) {
+      status.textContent = `${payload.temp ?? "--"}°C · ${payload.condition || "Unavailable"}`;
+    }
+    if (meta) {
+      meta.textContent = `Humidity ${payload.humidity ?? "--"}% · AQI ${payload.aqi_label || "--"} · UV ${payload.uv_index ?? "--"}`;
+    }
+  } catch (error) {
+    if (status) {
+      status.textContent = "Weather temporarily unavailable.";
+    }
+    if (meta) {
+      meta.textContent = "Using safe fallback data when needed.";
+    }
+  }
+}
