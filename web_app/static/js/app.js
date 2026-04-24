@@ -1,92 +1,78 @@
-// ===================== SMARTWEAR CORE APP =====================
+// ===================== SMARTWEAR APP =====================
 
-const video = document.getElementById('webcam');
-const overlay = document.getElementById('overlay');
-const hiddenCanvas = document.getElementById('hidden-canvas');
+const video = document.getElementById("webcam");
+const canvas = document.getElementById("hidden-canvas");
+const overlay = document.getElementById("overlay");
 
-const ctx = hiddenCanvas.getContext('2d');
-const octx = overlay.getContext('2d');
+const ctx = canvas.getContext("2d");
+const octx = overlay.getContext("2d");
 
-const nameDisplay = document.getElementById('name-display');
-const accDisplay = document.getElementById('acc-display');
+let running = false;
+let busy = false;
+let stream = null;
 
-let active = false;
-let isProcessing = false;
-let streamRef = null;
+let coords = { lat: null, lon: null };
 
-let userCoords = { lat: null, lon: null };
-
-const INFERENCE_THROTTLE = 1200;
+const INTERVAL = 1500; // 🔥 DO NOT REDUCE
 
 
 // ===================== GPS =====================
-function initGPS() {
-  if (!navigator.geolocation) return;
-
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      userCoords = {
-        lat: pos.coords.latitude,
-        lon: pos.coords.longitude
-      };
-      updateStatus("GPS OK");
-    },
-    () => updateStatus("GPS Failed")
-  );
-}
+navigator.geolocation.getCurrentPosition(
+  pos => {
+    coords.lat = pos.coords.latitude;
+    coords.lon = pos.coords.longitude;
+    updateLocation("GPS OK");
+  },
+  () => updateLocation("GPS Failed")
+);
 
 
-// ===================== CAMERA =====================
+// ===================== START =====================
 async function startApp() {
-  try {
-    streamRef = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user" }
-    });
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "user" }
+  });
 
-    video.srcObject = streamRef;
-    active = true;
+  video.srcObject = stream;
+  running = true;
 
-    updateStatus("Live");
-    processLoop();
+  updateStatus("Live");
 
-  } catch (err) {
-    console.error(err);
-    alert("Camera permission denied or unavailable");
-  }
+  loop();
 }
 
-function stopApp() {
-  active = false;
 
-  if (streamRef) {
-    streamRef.getTracks().forEach(track => track.stop());
-    streamRef = null;
+// ===================== STOP =====================
+function stopApp() {
+  running = false;
+
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
   }
 
   updateStatus("Stopped");
 }
 
 
-// ===================== MAIN LOOP =====================
-async function processLoop() {
-  if (!active) return;
-
-  if (isProcessing) {
-    requestAnimationFrame(processLoop);
+// ===================== LOOP =====================
+async function loop() {
+  if (!running || busy) {
+    requestAnimationFrame(loop);
     return;
   }
 
-  isProcessing = true;
+  busy = true;
+
+  canvas.width = 320;
+  canvas.height = 240;
+
+  ctx.drawImage(video, 0, 0, 320, 240);
+
+  const frame = canvas.toDataURL("image/jpeg", 0.6);
 
   try {
-    hiddenCanvas.width = 320;
-    hiddenCanvas.height = 240;
-
-    ctx.drawImage(video, 0, 0, 320, 240);
-
-    const frame = hiddenCanvas.toDataURL("image/jpeg", 0.6);
-
-    const res = await fetch("/process_remote_frame", {
+    const res = await fetch("/process_frame", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image: frame })
@@ -94,28 +80,22 @@ async function processLoop() {
 
     const data = await res.json();
 
-    drawOverlay(data);
+    drawBox(data);
+    updateUI(data);
 
-    if (data?.name && data.name !== "Unknown") {
-      handleSuccess(data);
-      return;
-    }
-
-  } catch (err) {
-    console.warn("Inference error:", err);
+  } catch {
+    console.warn("Network issue");
   }
 
   setTimeout(() => {
-    isProcessing = false;
-    requestAnimationFrame(processLoop);
-  }, INFERENCE_THROTTLE);
+    busy = false;
+    requestAnimationFrame(loop);
+  }, INTERVAL);
 }
 
 
-// ===================== OVERLAY =====================
-function drawOverlay(data) {
-  if (!overlay || !octx) return;
-
+// ===================== DRAW BOX =====================
+function drawBox(data) {
   octx.clearRect(0, 0, overlay.width, overlay.height);
 
   if (!data?.box) return;
@@ -126,41 +106,40 @@ function drawOverlay(data) {
   const color = known ? "#22c55e" : "#eab308";
 
   octx.strokeStyle = color;
-  octx.lineWidth = 2;
+  octx.lineWidth = 3;
   octx.strokeRect(l, t, r - l, b - t);
 
   octx.fillStyle = color;
-  octx.font = "bold 14px sans-serif";
-  octx.fillText(known ? data.name : "Unknown", l, t - 5);
+  octx.fillText(data.name || "Unknown", l, t - 5);
+}
 
-  if (nameDisplay) {
-    nameDisplay.textContent = data.name;
-    nameDisplay.style.color = color;
-  }
 
-  if (accDisplay) {
-    accDisplay.textContent =
-      `Mask: ${data.mask} • Glasses: ${data.glasses}`;
+// ===================== UI =====================
+function updateUI(data) {
+  const nameEl = document.getElementById("name-display");
+  const accEl = document.getElementById("acc-display");
+
+  if (nameEl) nameEl.textContent = data.name;
+  if (accEl) accEl.textContent =
+    `Mask: ${data.mask} • Glasses: ${data.glasses}`;
+
+  if (data.name !== "Unknown") {
+    goToDetail(data);
   }
 }
 
 
-// ===================== SUCCESS FLOW =====================
-function handleSuccess(data) {
-  const cityEl = document.getElementById("city");
-
-  const city = cityEl ? cityEl.value : "Unknown";
-
+// ===================== REDIRECT =====================
+function goToDetail(data) {
   const url =
     `/detail/${encodeURIComponent(data.name)}` +
-    `?lat=${userCoords.lat || ""}` +
-    `&lon=${userCoords.lon || ""}` +
-    `&city=${encodeURIComponent(city)}` +
-    `&mask=${encodeURIComponent(data.mask || "")}` +
-    `&glasses=${encodeURIComponent(data.glasses || "")}`;
+    `?lat=${coords.lat}` +
+    `&lon=${coords.lon}` +
+    `&mask=${data.mask}` +
+    `&glasses=${data.glasses}`;
 
   setTimeout(() => {
-    active = false;
+    stopApp();
     window.location.href = url;
   }, 500);
 }
@@ -168,48 +147,29 @@ function handleSuccess(data) {
 
 // ===================== REGISTER =====================
 async function registerUser() {
+  if (busy) return;
+
   const name = prompt("Enter name");
   if (!name) return;
 
-  try {
-    hiddenCanvas.width = 320;
-    hiddenCanvas.height = 240;
+  canvas.width = 320;
+  canvas.height = 240;
 
-    ctx.drawImage(video, 0, 0, 320, 240);
+  ctx.drawImage(video, 0, 0, 320, 240);
 
-    const frame = hiddenCanvas.toDataURL("image/jpeg", 0.7);
+  const frame = canvas.toDataURL("image/jpeg", 0.7);
 
-    const res = await fetch("/register_remote", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, image: frame })
-    });
+  await fetch("/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, image: frame })
+  });
 
-    const data = await res.json();
-
-    alert(data.success ? "Registered successfully" : "Registration failed");
-
-  } catch (err) {
-    console.error(err);
-    alert("Server error");
-  }
+  alert("Registered");
 }
 
 
-// ===================== STATUS =====================
-function updateStatus(msg) {
-  console.log("[SmartWear]", msg);
-}
-
-
-// ===================== INIT =====================
-(function init() {
-  initGPS();
-  console.log("SmartWear App Loaded");
-})();
-
-
-// ===================== GLOBAL EXPORTS (safe) =====================
+// ===================== EXPORT =====================
 window.startApp = startApp;
 window.stopApp = stopApp;
 window.registerUser = registerUser;
