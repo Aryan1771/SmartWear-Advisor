@@ -1,79 +1,53 @@
-# ===================== inference.py =====================
-
 import os
+
 import requests
 
-# 🔗 Your HF endpoint (SET THIS IN RENDER ENV)
-HF_API_URL = os.environ.get("HF_API_URL")
-
-# Optional token (if private space)
-HF_API_TOKEN = os.environ.get("HF_API_TOKEN")
+HF_API_URL = os.environ.get("HF_API_URL") or os.environ.get("HF_SPACE_URL")
+HF_API_TOKEN = os.environ.get("HF_API_TOKEN") or os.environ.get("HF_TOKEN")
 
 HEADERS = {}
 if HF_API_TOKEN:
     HEADERS["Authorization"] = f"Bearer {HF_API_TOKEN}"
 
-
-# ─────────────────────────────────────────────
-# MAIN INFERENCE FUNCTION
-# ─────────────────────────────────────────────
-def run_inference(image_base64):
-    """
-    Sends frame to HF Space and returns result
-    """
-
-    if not HF_API_URL:
-        print("❌ HF_API_URL not set")
-        return fallback()
-
-    try:
-        payload = {
-            "image": image_base64  # already base64 from frontend
-        }
-
-        res = requests.post(
-            HF_API_URL,
-            json=payload,
-            headers=HEADERS,
-            timeout=5  # IMPORTANT (prevents freeze)
-        )
-
-        if res.status_code != 200:
-            print("❌ HF Error:", res.text)
-            return fallback()
-
-        data = res.json()
-
-        return normalize_response(data)
-
-    except Exception as e:
-        print("❌ HF Request Failed:", e)
-        return fallback()
+_session = requests.Session()
 
 
-# ─────────────────────────────────────────────
-# NORMALIZE RESPONSE
-# ─────────────────────────────────────────────
-def normalize_response(data):
-    """
-    Convert HF response → your app format
-    """
-
+def fallback(error=None):
     return {
-        "name": data.get("name", "Unknown"),
-        "mask": data.get("mask", "No Mask"),
-        "glasses": data.get("glasses", "No Glasses"),
-        "box": data.get("box", None)
-    }
-
-
-# ─────────────────────────────────────────────
-# FALLBACK (NO CRASH)
-# ─────────────────────────────────────────────
-def fallback():
-    return {
+        "recognized": False,
         "name": "Unknown",
         "mask": "No Mask",
         "glasses": "No Glasses",
-        "box": None
+        "box": None,
+        "error": error,
     }
+
+
+def normalize_response(data):
+    name = data.get("name", "Unknown") or "Unknown"
+    return {
+        "recognized": name != "Unknown",
+        "name": name,
+        "mask": data.get("mask", "No Mask"),
+        "glasses": data.get("glasses", "No Glasses"),
+        "box": data.get("box"),
+        "error": None,
+    }
+
+
+def run_inference(image_base64):
+    if not HF_API_URL:
+        return fallback("hf_not_configured")
+
+    try:
+        response = _session.post(
+            HF_API_URL,
+            json={"image": image_base64},
+            headers=HEADERS,
+            timeout=5,
+        )
+        if response.status_code != 200:
+            return fallback("hf_request_failed")
+        return normalize_response(response.json())
+    except Exception:
+        return fallback("hf_unreachable")

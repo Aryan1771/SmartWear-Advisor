@@ -3,36 +3,130 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Result | SmartWear</title>
-
-  <link rel="stylesheet" href="/static/css/style.css">
+  <title>SmartWear Result</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-
 <body>
+  <div class="app-shell">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <div>
+          <p class="eyebrow">SmartWear</p>
+          <h2>Result</h2>
+        </div>
+        <button type="button" class="chip-button" data-theme-toggle>Light</button>
+      </div>
+      <nav class="sidebar-nav">
+        <a class="sidebar-link" href="/">Scanner</a>
+        <a class="sidebar-link" href="/admin/login">Admin</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button type="button" class="btn btn-secondary btn-block" data-install-button hidden>Install App</button>
+      </div>
+    </aside>
 
-<div class="main-content">
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
-  <h1>Recognition Result</h1>
+    <main class="page">
+      <header class="topbar">
+        <button type="button" class="icon-button" data-sidebar-open>Menu</button>
+        <div>
+          <p class="eyebrow">Recognition result</p>
+          <h1>{{ name }}</h1>
+        </div>
+      </header>
 
-  <div class="card">
-    <p><b>Name:</b> {{ name }}</p>
-    <p><b>Mask:</b> {{ mask }}</p>
-    <p><b>Glasses:</b> {{ glasses }}</p>
+      <section class="detail-grid">
+        <article class="panel detail-card">
+          <span class="panel-pill">Identity snapshot</span>
+          <h2>Accessory readout</h2>
+          <div class="detail-metrics">
+            <div class="metric-card">
+              <span>Name</span>
+              <strong>{{ name }}</strong>
+            </div>
+            <div class="metric-card">
+              <span>Mask</span>
+              <strong>{{ mask }}</strong>
+            </div>
+            <div class="metric-card">
+              <span>Glasses</span>
+              <strong>{{ glasses }}</strong>
+            </div>
+            <div class="metric-card">
+              <span>Location</span>
+              <strong>{{ location.city }}</strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel detail-card">
+          <span class="panel-pill">Current weather</span>
+          <h2>Outdoor conditions</h2>
+          <div class="detail-metrics">
+            <div class="metric-card">
+              <span>Temperature</span>
+              <strong>{{ weather.temp }}&deg;C</strong>
+            </div>
+            <div class="metric-card">
+              <span>Feels like</span>
+              <strong>{{ weather.feels_like }}&deg;C</strong>
+            </div>
+            <div class="metric-card">
+              <span>Humidity</span>
+              <strong>{{ weather.humidity }}%</strong>
+            </div>
+            <div class="metric-card">
+              <span>Condition</span>
+              <strong>{{ weather.description }}</strong>
+            </div>
+            <div class="metric-card">
+              <span>UV index</span>
+              <strong>{{ weather.uv_index }}</strong>
+            </div>
+            <div class="metric-card">
+              <span>AQI</span>
+              <strong>{{ weather.aqi_label }}</strong>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel forecast-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">6-day forecast</p>
+            <h2>Plan accessories ahead</h2>
+          </div>
+          <a href="/" class="btn btn-primary">Scan again</a>
+        </div>
+
+        <div class="recommendation-list">
+          {% for item in recommendations %}
+          <div class="recommendation-item">{{ item }}</div>
+          {% endfor %}
+        </div>
+
+        <div class="forecast-grid">
+          {% for day in forecast %}
+          <article class="forecast-card">
+            <span>{{ day.label }}</span>
+            <strong>{{ day.full_label }}</strong>
+            <p>{{ day.condition }}</p>
+            <div class="forecast-temp">{{ day.temp_max }}&deg; / {{ day.temp_min }}&deg;</div>
+            <small>UV {{ day.uv_max }} | Rain {{ day.precip_probability }}%</small>
+          </article>
+          {% else %}
+          <p class="helper-text">Forecast is temporarily unavailable. Current weather fallback is still active.</p>
+          {% endfor %}
+        </div>
+      </section>
+    </main>
   </div>
 
-  <div class="card">
-    <p><b>City:</b> {{ weather.city }}</p>
-    <p><b>Temperature:</b> {{ weather.temp }}°C</p>
-    <p><b>Humidity:</b> {{ weather.humidity }}%</p>
-    <p><b>UV:</b> {{ weather.uv }}</p>
-    <p><b>AQI:</b> {{ weather.aqi_label }}</p>
-  </div>
-
-  <a href="/" class="btn">← Back</a>
-
-</div>
-
-<script src="/static/js/ui.js"></script>
-
+  <script type="module">
+    import { initAppShell } from "{{ url_for('static', filename='js/ui.js') }}";
+    initAppShell();
+  </script>
 </body>
 </html>

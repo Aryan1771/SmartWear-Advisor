@@ -3,72 +3,159 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Dashboard</title>
-
-  <link rel="stylesheet" href="/static/css/style.css">
-
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <title>SmartWear Admin</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-
 <body>
+  <div class="app-shell">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <div>
+          <p class="eyebrow">SmartWear</p>
+          <h2>Admin</h2>
+        </div>
+        <button type="button" class="chip-button" data-theme-toggle>Light</button>
+      </div>
+      <nav class="sidebar-nav">
+        <a class="sidebar-link" href="/">Scanner</a>
+        <button type="button" class="sidebar-link sidebar-button" data-scroll-target="users">Users</button>
+        <button type="button" class="sidebar-link sidebar-button" data-scroll-target="history">Detection history</button>
+        <button type="button" class="sidebar-link sidebar-button" data-scroll-target="audit">Audit log</button>
+        <a class="sidebar-link" href="/admin/logout">Logout</a>
+      </nav>
+      <div class="sidebar-footer">
+        <p>Read-only analytics panel with safe filters.</p>
+      </div>
+    </aside>
 
-<nav id="sidebar" class="sidebar">
-  <div class="sidebar-header">
-    <span>Admin</span>
-    <button onclick="toggleTheme()">🌙</button>
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <main class="page">
+      <header class="topbar">
+        <button type="button" class="icon-button" data-sidebar-open>Menu</button>
+        <div>
+          <p class="eyebrow">Control panel</p>
+          <h1>Operational overview</h1>
+        </div>
+      </header>
+
+      <section class="stats-grid">
+        <article class="stat-card panel">
+          <span>Total users</span>
+          <strong>{{ stats.total_users }}</strong>
+        </article>
+        <article class="stat-card panel">
+          <span>Total detections</span>
+          <strong>{{ stats.total_detections }}</strong>
+        </article>
+        <article class="stat-card panel">
+          <span>Audit events</span>
+          <strong>{{ stats.audit_events }}</strong>
+        </article>
+        <article class="stat-card panel">
+          <span>Recent activity</span>
+          <strong>{{ stats.recent_activity or "No activity yet" }}</strong>
+        </article>
+      </section>
+
+      <section class="panel chart-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Usage trend</p>
+            <h2>Detections over time</h2>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="trendChart"></canvas>
+        </div>
+      </section>
+
+      <section id="users" class="panel table-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Registered users</p>
+            <h2>Enrollment records</h2>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Registered on</th>
+                <th>Notes</th>
+                <th>Detections</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="history" class="panel table-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Detection history</p>
+            <h2>Recognition activity</h2>
+          </div>
+          <div class="toolbar">
+            <select id="user-filter" class="text-input compact-input">
+              <option value="">All users</option>
+              {% for user in users %}
+              <option value="{{ user.name }}">{{ user.name }}</option>
+              {% endfor %}
+            </select>
+            <input id="history-search" class="text-input compact-input" type="search" placeholder="Search name, accessories, city">
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Timestamp</th>
+                <th>Mask</th>
+                <th>Glasses</th>
+                <th>City</th>
+                <th>Temp</th>
+                <th>AQI</th>
+                <th>UV</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="audit" class="panel table-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Audit log</p>
+            <h2>Admin and system events</h2>
+          </div>
+          <div class="toolbar">
+            <input id="audit-search" class="text-input compact-input" type="search" placeholder="Search event, detail, ip">
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Event</th>
+                <th>Detail</th>
+                <th>IP</th>
+              </tr>
+            </thead>
+            <tbody id="audit-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <a href="/">🏠 Home</a>
-  <a href="#users" onclick="scrollToSection('users')">👥 Users</a>
-  <a href="#history" onclick="scrollToSection('history')">🕒 History</a>
-  <a href="/admin/logout">🔓 Logout</a>
-</nav>
-
-<button class="hamburger" onclick="toggleSidebar()">☰</button>
-
-<div class="main-content">
-
-  <h1>Admin Dashboard</h1>
-
-  <!-- Chart -->
-  <canvas id="trendChart"></canvas>
-
-  <!-- Users -->
-  <div id="users">
-    <h2>Users</h2>
-    <table>
-      {% for u in users %}
-      <tr>
-        <td>{{ u.name }}</td>
-        <td>{{ u.detection_count }}</td>
-      </tr>
-      {% endfor %}
-    </table>
-  </div>
-
-  <!-- History -->
-  <div id="history">
-    <h2>History</h2>
-    <table>
-      <tbody id="history-tbody">
-        {% for h in history %}
-        <tr>
-          <td>{{ h.name }}</td>
-          <td>{{ h.timestamp }}</td>
-          <td>{{ h.mask }}</td>
-          <td>{{ h.glasses }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-</div>
-
-<script src="/static/js/ui.js"></script>
-<script src="/static/js/admin.js"></script>
-
+  <script id="admin-payload" type="application/json">{{ admin_payload|safe }}</script>
+  <script type="module" src="{{ url_for('static', filename='js/admin.js') }}"></script>
 </body>
 </html>

@@ -89,7 +89,10 @@ def generate_recommendation(
 
     # ── Rain Forecast ───────────────────────────────────
     if forecast:
-        max_precip = max((h.get("precip_prob", 0) for h in forecast), default=0)
+        max_precip = max(
+            (h.get("precip_prob", h.get("precip_probability", 0)) for h in forecast),
+            default=0,
+        )
 
         if max_precip >= 60:
             add(f"☔ {int(max_precip)}% chance of rain — carry an umbrella.")

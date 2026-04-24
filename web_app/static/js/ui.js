@@ -1,66 +1,113 @@
-// ===================== UI CORE =====================
+let deferredPrompt = null;
 
-// THEME
-function applyTheme(theme) {
+export function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
-
-  const icon = theme === "dark" ? "🌙" : "☀️";
-
-  document.querySelectorAll(".theme-toggle").forEach(btn => {
-    btn.textContent = icon;
+  const label = theme === "dark" ? "Light mode" : "Dark mode";
+  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+    button.setAttribute("aria-label", label);
+    button.textContent = theme === "dark" ? "Light" : "Dark";
   });
 }
 
-function toggleTheme() {
+export function toggleTheme() {
   const current = document.documentElement.getAttribute("data-theme") || "dark";
   const next = current === "dark" ? "light" : "dark";
-
-  localStorage.setItem("theme", next);
+  localStorage.setItem("smartwear-theme", next);
   applyTheme(next);
 }
 
-(function initTheme() {
-  applyTheme(localStorage.getItem("theme") || "dark");
-})();
+export function initTheme() {
+  applyTheme(localStorage.getItem("smartwear-theme") || "dark");
+}
 
-
-// SIDEBAR
-function toggleSidebar() {
+export function toggleSidebar(forceOpen) {
   const sidebar = document.getElementById("sidebar");
-  if (sidebar) sidebar.classList.toggle("collapsed");
+  const overlay = document.getElementById("sidebar-overlay");
+  if (!sidebar) {
+    return;
+  }
+
+  const willOpen = typeof forceOpen === "boolean"
+    ? forceOpen
+    : !sidebar.classList.contains("mobile-open");
+
+  sidebar.classList.toggle("mobile-open", willOpen);
+  overlay?.classList.toggle("visible", willOpen);
 }
 
-
-// SCROLL
-function scrollToSection(id) {
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+export function setStatus(message, tone = "neutral") {
+  const node = document.getElementById("status-text");
+  if (!node) {
+    return;
+  }
+  node.textContent = message;
+  node.dataset.tone = tone;
 }
 
-
-// STATUS
-function updateStatus(text) {
-  const el = document.getElementById("status-text");
-  if (el) el.textContent = text;
+export function setLocationStatus(message) {
+  const node = document.getElementById("location-msg");
+  if (node) {
+    node.textContent = message;
+  }
 }
 
-function updateLocation(text) {
-  const el = document.getElementById("location-msg");
-  if (el) el.textContent = text;
+export function showToast(message, tone = "info") {
+  const root = document.getElementById("toast-root");
+  if (!root) {
+    return;
+  }
+
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${tone}`;
+  toast.textContent = message;
+  root.appendChild(toast);
+
+  window.setTimeout(() => {
+    toast.classList.add("toast-hide");
+    window.setTimeout(() => toast.remove(), 220);
+  }, 2800);
 }
 
-function installPWA() {
-  if (!deferredPrompt) return;
+export function scrollToSection(id) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
-  deferredPrompt.prompt();
+export function bindChrome() {
+  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+    button.addEventListener("click", toggleTheme);
+  });
+  document.querySelectorAll("[data-sidebar-open]").forEach((button) => {
+    button.addEventListener("click", () => toggleSidebar(true));
+  });
+  document.getElementById("sidebar-overlay")?.addEventListener("click", () => toggleSidebar(false));
+}
 
-  deferredPrompt.userChoice.then(() => {
-    deferredPrompt = null;
+export function bindInstallPrompt() {
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    deferredPrompt = event;
+    document.querySelectorAll("[data-install-button]").forEach((button) => {
+      button.hidden = false;
+    });
+  });
+
+  document.querySelectorAll("[data-install-button]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (!deferredPrompt) {
+        showToast("Install prompt is not available on this device yet.", "warning");
+        return;
+      }
+
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      button.hidden = true;
+    });
   });
 }
-// EXPORT GLOBAL
-window.toggleTheme = toggleTheme;
-window.toggleSidebar = toggleSidebar;
-window.scrollToSection = scrollToSection;
-window.updateStatus = updateStatus;
-window.updateLocation = updateLocation;
-window.installPWA = installPWA;
+
+export function initAppShell() {
+  initTheme();
+  bindChrome();
+  bindInstallPrompt();
+}

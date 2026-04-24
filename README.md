@@ -1,10 +1,40 @@
-# SmartWear-Advisor
-AI-based application for face detection and accessory recommendations based on real-time weather data.
+# SmartWear Advisor
 
-If model files ie *.keras, *.tflite are absent from models folder then 
+SmartWear Advisor is a Flask web app that captures a face, sends lightweight frames to a Hugging Face inference endpoint, detects mask and glasses usage, and combines that result with weather data to present safer accessory recommendations.
 
-1. run ai_model/download_datasets.py
+## What is in this repo
 
-2. run ai_model/train_model.py 
+- Render-hosted Flask frontend and admin dashboard
+- Weather integration using OpenWeatherMap and Open-Meteo
+- Turso-backed registration, detection history, and audit logs
+- PWA-ready mobile frontend with camera capture flow
 
-3. Lastly run mainapp.py
+## Core behavior
+
+- Recognition requests are throttled to reduce Render memory pressure.
+- If a face is not recognized within 2 seconds, inference stops and remains paused until `Register` is used.
+- Registration is a one-shot capture flow with payload size checks.
+- Admin is read-only in this repo: user list, detection history, audit logs, and analytics.
+
+## Important environment variables
+
+- `SECRET_KEY`
+- `ADMIN_PASSWORD`
+- `HF_API_URL` or `HF_SPACE_URL`
+- `HF_API_TOKEN` or `HF_TOKEN`
+- `OWM_API_KEY`
+- `TURSO_URL`
+- `TURSO_TOKEN`
+
+## Local run
+
+```bash
+pip install -r requirements.txt
+python mainweb.py
+```
+
+Production entrypoint:
+
+```bash
+gunicorn mainweb:app --workers 2 --timeout 120
+```

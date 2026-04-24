@@ -4,67 +4,91 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SmartWear Advisor</title>
-
-  <link rel="manifest" href="/static/manifest.json">
-  <link rel="stylesheet" href="/static/css/style.css">
-
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-
 <body>
+  <div class="app-shell">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <div>
+          <p class="eyebrow">SmartWear</p>
+          <h2>Advisor</h2>
+        </div>
+        <button type="button" class="chip-button" data-theme-toggle>Light</button>
+      </div>
+      <nav class="sidebar-nav">
+        <a class="sidebar-link active" href="/">Scanner</a>
+        <a class="sidebar-link" href="/admin/login">Admin</a>
+      </nav>
+      <div class="sidebar-footer">
+        <p>Stable face recognition flow for Render free tier.</p>
+        <button type="button" class="btn btn-secondary btn-block" data-install-button hidden>Install App</button>
+      </div>
+    </aside>
 
-<nav id="sidebar" class="sidebar">
-  <div class="sidebar-header">
-    <span>SmartWear</span>
-    <button onclick="toggleTheme()">🌙</button>
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <main class="page">
+      <header class="topbar">
+        <button type="button" class="icon-button" data-sidebar-open>Menu</button>
+        <div>
+          <p class="eyebrow">Live scanner</p>
+          <h1>Weather-aware face and accessory recognition</h1>
+        </div>
+      </header>
+
+      <section class="hero-grid">
+        <div class="panel hero-copy">
+          <span class="panel-pill">Frontend stabilized</span>
+          <h2>Keep the face inside the guide. Recognition stops safely after 2 seconds if no match is found.</h2>
+          <p class="hero-text">The camera stays local, requests are throttled, and the Hugging Face endpoint is not hammered when a face stays unknown. Register only when you want to enroll a new user.</p>
+          <div class="status-stack">
+            <div class="status-card">
+              <span class="status-label">Recognition status</span>
+              <strong id="status-text" data-tone="neutral">Ready when you are.</strong>
+            </div>
+            <div class="status-card">
+              <span class="status-label">Location status</span>
+              <strong id="location-msg">Preparing weather location...</strong>
+            </div>
+            <div class="status-card">
+              <span class="status-label">Camera state</span>
+              <strong id="camera-state">Idle</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel camera-panel">
+          <div class="camera-shell">
+            <video id="webcam" class="camera-video" autoplay playsinline muted></video>
+            <canvas id="overlay" class="camera-overlay"></canvas>
+            <div class="camera-caption">
+              <strong id="name-display">Awaiting face</strong>
+              <p id="acc-display">Mask and glasses detection will appear here.</p>
+            </div>
+          </div>
+
+          <div class="action-row">
+            <button id="start-button" type="button" class="btn btn-primary">Start</button>
+            <button id="stop-button" type="button" class="btn btn-secondary">Stop</button>
+            <button id="register-button" type="button" class="btn btn-accent">Register</button>
+          </div>
+
+          <p class="helper-text">If the face is not recognized in 2 seconds, scanning pauses and waits for registration instead of continuing to send frames.</p>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <a href="/">🏠 Home</a>
-  <a href="/admin/login">🔐 Admin</a>
-</nav>
+  <canvas id="hidden-canvas" hidden></canvas>
+  <div id="toast-root" class="toast-root"></div>
 
-<button class="hamburger" onclick="toggleSidebar()">☰</button>
-
-<div class="main-content">
-  <h1>SmartWear Advisor</h1>
-
-  <p id="status-text">Idle</p>
-  <p id="location-msg">Getting location...</p>
-
-  <div class="camera-container">
-    <video id="webcam" autoplay playsinline></video>
-    <canvas id="overlay"></canvas>
-  </div>
-
-  <canvas id="hidden-canvas" style="display:none;"></canvas>
-
-  <h2 id="name-display">---</h2>
-  <p id="acc-display">---</p>
-
-  <div class="controls">
-    <button onclick="startApp()">Start</button>
-    <button onclick="stopApp()">Stop</button>
-    <button onclick="registerUser()">Register</button>
-  </div>
-</div>
-
-<!-- ✅ MODULE FIX -->
-<script type="module">
-  import { startApp, stopApp, registerUser } from '/static/js/app.js';
-  import { toggleTheme, toggleSidebar } from '/static/js/ui.js';
-
-  window.startApp = startApp;
-  window.stopApp = stopApp;
-  window.registerUser = registerUser;
-  window.toggleTheme = toggleTheme;
-  window.toggleSidebar = toggleSidebar;
-</script>
-
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/static/js/sw.js');
-}
-</script>
-
+  <script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("{{ url_for('static', filename='js/sw.js') }}");
+    }
+  </script>
 </body>
 </html>

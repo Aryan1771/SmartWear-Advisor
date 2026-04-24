@@ -1,34 +1,57 @@
-# backend/weather_api.py (PRODUCTION READY)
-
-import os
-import requests
 import logging
+import os
 import time
 from datetime import datetime
 
-# ── Logging ─────────────────────────────────────────────
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("WEATHER")
+import requests
 
-# ── Config ──────────────────────────────────────────────
-OWM_KEY = os.getenv("OWM_API_KEY", "YOUR_OWM_API_KEY")
+logger = logging.getLogger("smartwear.weather")
+
+OWM_KEY = os.getenv("OWM_API_KEY", "")
 
 AQI_LABELS = {1: "Good", 2: "Fair", 3: "Moderate", 4: "Poor", 5: "Very Poor"}
+WEATHER_CODES = {
+    0: "Clear",
+    1: "Mostly Clear",
+    2: "Partly Cloudy",
+    3: "Cloudy",
+    45: "Foggy",
+    48: "Rime Fog",
+    51: "Light Drizzle",
+    53: "Drizzle",
+    55: "Heavy Drizzle",
+    56: "Freezing Drizzle",
+    57: "Heavy Freezing Drizzle",
+    61: "Light Rain",
+    63: "Rain",
+    65: "Heavy Rain",
+    66: "Freezing Rain",
+    67: "Heavy Freezing Rain",
+    71: "Light Snow",
+    73: "Snow",
+    75: "Heavy Snow",
+    77: "Snow Grains",
+    80: "Rain Showers",
+    81: "Rain Showers",
+    82: "Heavy Showers",
+    85: "Snow Showers",
+    86: "Heavy Snow Showers",
+    95: "Thunderstorm",
+    96: "Thunderstorm With Hail",
+    99: "Severe Thunderstorm",
+}
 
-# ── Session (IMPORTANT) ─────────────────────────────────
 _session = requests.Session()
-
-# ── Cache (CRITICAL FIX) ────────────────────────────────
 _cache = {}
-CACHE_TTL = 300  # 5 minutes
+CACHE_TTL = 300
 
-
-_FALLBACK = {
+_FALLBACK_CURRENT = {
     "city": "Unknown",
     "temp": 25,
     "feels_like": 25,
     "humidity": 50,
     "condition": "clear",
+    "description": "Unavailable",
     "uv_index": 0.0,
     "aqi": 1,
     "aqi_label": "Good",
@@ -38,149 +61,194 @@ _FALLBACK = {
 }
 
 
-def _cache_key(query):
-    return str(query).lower().strip()
+def _round_coord(value):
+    try:
+        return round(float(value), 4)
+    except (TypeError, ValueError):
+        return None
 
 
-def get_weather(query) -> dict:
-    key = _cache_key(query)
+def _cache_key(lat=None, lon=None, query=None):
+    rounded_lat = _round_coord(lat)
+    rounded_lon = _round_coord(lon)
+    if rounded_lat is not None and rounded_lon is not None:
+        return f"coords:{rounded_lat}:{rounded_lon}"
+    return f"query:{str(query or '').strip().lower()}"
 
-    # 🔥 CACHE HIT
-    if key in _cache:
-        data, ts = _cache[key]
-        if time.time() - ts < CACHE_TTL:
-            return data
 
+def _get_cached(key):
+    cached = _cache.get(key)
+    if not cached:
+        return None
+    payload, timestamp = cached
+    if time.time() - timestamp < CACHE_TTL:
+        return payload
+    _cache.pop(key, None)
+    return None
+
+
+def _set_cached(key, payload):
+    _cache[key] = (payload, time.time())
+
+
+def _safe_float(value, default=None):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _weather_description(code):
+    return WEATHER_CODES.get(int(code), "Unavailable")
+
+
+def get_weather(lat=None, lon=None, query=None) -> dict:
+    cache_key = _cache_key(lat=lat, lon=lon, query=query)
+    cached = _get_cached(cache_key)
+    if cached:
+        return dict(cached)
+
+    result = dict(_FALLBACK_CURRENT)
     params = {"appid": OWM_KEY, "units": "metric"}
 
-    if "," in str(query) and any(c.isdigit() for c in str(query)):
-        lat_s, lon_s = str(query).split(",", 1)
-        params["lat"] = lat_s.strip()
-        params["lon"] = lon_s.strip()
+    if _round_coord(lat) is not None and _round_coord(lon) is not None:
+        params["lat"] = _round_coord(lat)
+        params["lon"] = _round_coord(lon)
+    elif query:
+        params["q"] = str(query).strip()
+        result["city"] = str(query).strip()
     else:
-        params["q"] = str(query)
+        _set_cached(cache_key, result)
+        return result
 
-    result = dict(_FALLBACK)
-    result["city"] = str(query)
+    if not OWM_KEY:
+        logger.warning("OWM_API_KEY is not configured; returning fallback weather data.")
+        _set_cached(cache_key, result)
+        return result
 
     try:
-        # ── MAIN WEATHER CALL ─────────────────────────
-        r = _session.get(
+        weather_response = _session.get(
             "https://api.openweathermap.org/data/2.5/weather",
             params=params,
             timeout=5,
         )
-        r.raise_for_status()
-        p = r.json()
+        weather_response.raise_for_status()
+        weather_payload = weather_response.json()
 
-        lat = p["coord"]["lat"]
-        lon = p["coord"]["lon"]
+        lat = weather_payload["coord"]["lat"]
+        lon = weather_payload["coord"]["lon"]
+        main = weather_payload.get("main", {})
+        condition = (weather_payload.get("weather") or [{}])[0]
 
-        result.update({
-            "city": p.get("name", str(query)),
-            "temp": int(p["main"]["temp"]),
-            "feels_like": int(p["main"]["feels_like"]),
-            "humidity": p["main"]["humidity"],
-            "condition": p["weather"][0]["main"].lower(),
-            "lat": lat,
-            "lon": lon,
-        })
+        result.update(
+            {
+                "city": weather_payload.get("name", result["city"]),
+                "temp": int(round(main.get("temp", result["temp"]))),
+                "feels_like": int(round(main.get("feels_like", result["feels_like"]))),
+                "humidity": int(main.get("humidity", result["humidity"])),
+                "condition": str(condition.get("main", result["condition"])).lower(),
+                "description": str(condition.get("description", "")).title() or result["description"],
+                "lat": lat,
+                "lon": lon,
+            }
+        )
 
-        # ── UV + AQI PARALLEL OPTIMIZATION ────────────
-        try:
-            uv_res = _session.get(
-                "https://api.openweathermap.org/data/3.0/onecall",
-                params={
-                    "lat": lat,
-                    "lon": lon,
-                    "appid": OWM_KEY,
-                    "exclude": "minutely,hourly,daily,alerts",
-                },
-                timeout=4,
+        uv_response = _session.get(
+            "https://api.openweathermap.org/data/3.0/onecall",
+            params={
+                "lat": lat,
+                "lon": lon,
+                "appid": OWM_KEY,
+                "exclude": "minutely,hourly,daily,alerts",
+            },
+            timeout=4,
+        )
+        if uv_response.ok:
+            result["uv_index"] = round(
+                float(uv_response.json().get("current", {}).get("uvi", 0.0)), 1
             )
 
-            aq_res = _session.get(
-                "https://api.openweathermap.org/data/2.5/air_pollution",
-                params={"lat": lat, "lon": lon, "appid": OWM_KEY},
-                timeout=4,
+        aqi_response = _session.get(
+            "https://api.openweathermap.org/data/2.5/air_pollution",
+            params={"lat": lat, "lon": lon, "appid": OWM_KEY},
+            timeout=4,
+        )
+        if aqi_response.ok:
+            aqi_payload = (aqi_response.json().get("list") or [{}])[0]
+            aqi_value = int(aqi_payload.get("main", {}).get("aqi", result["aqi"]))
+            result["aqi"] = aqi_value
+            result["aqi_label"] = AQI_LABELS.get(aqi_value, "Unknown")
+            result["pm25"] = round(
+                float(aqi_payload.get("components", {}).get("pm2_5", 0.0)), 1
             )
+    except Exception as exc:
+        logger.warning("Weather fetch failed: %s", exc)
 
-            if uv_res.ok:
-                result["uv_index"] = round(
-                    float(uv_res.json().get("current", {}).get("uvi", 0)), 1
-                )
-
-            if aq_res.ok:
-                aq_data = aq_res.json()["list"][0]
-                aqi_val = aq_data["main"]["aqi"]
-
-                result["aqi"] = aqi_val
-                result["aqi_label"] = AQI_LABELS.get(aqi_val, "Unknown")
-                result["pm25"] = round(
-                    aq_data["components"].get("pm2_5", 0.0), 1
-                )
-
-        except Exception as e:
-            logger.warning(f"[Weather] UV/AQI error: {e}")
-
-    except Exception as e:
-        logger.error(f"[Weather] Main call error: {e}")
-
-    # 🔥 STORE IN CACHE
-    _cache[key] = (result, time.time())
-
-    return result
+    _set_cached(cache_key, result)
+    return dict(result)
 
 
-def get_hourly_forecast(lat, lon) -> list:
-    if not lat or not lon:
+def get_six_day_forecast(lat, lon) -> list:
+    if _round_coord(lat) is None or _round_coord(lon) is None:
         return []
 
+    cache_key = f"forecast:{_round_coord(lat)}:{_round_coord(lon)}"
+    cached = _get_cached(cache_key)
+    if cached:
+        return list(cached)
+
     try:
-        r = _session.get(
+        response = _session.get(
             "https://api.open-meteo.com/v1/forecast",
             params={
-                "latitude": lat,
-                "longitude": lon,
-                "hourly": "temperature_2m,precipitation_probability,weathercode",
-                "forecast_days": 1,
+                "latitude": _round_coord(lat),
+                "longitude": _round_coord(lon),
+                "daily": "weathercode,temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_probability_max",
+                "forecast_days": 6,
                 "timezone": "auto",
             },
             timeout=5,
         )
+        response.raise_for_status()
+        daily = response.json().get("daily", {})
 
-        r.raise_for_status()
-        data = r.json()["hourly"]
+        forecast = []
+        for idx, date_text in enumerate(daily.get("time", [])):
+            parsed_date = datetime.fromisoformat(date_text)
+            forecast.append(
+                {
+                    "date": date_text,
+                    "label": parsed_date.strftime("%a"),
+                    "full_label": parsed_date.strftime("%d %b"),
+                    "condition": _weather_description(daily.get("weathercode", [0])[idx]),
+                    "temp_max": int(round(daily.get("temperature_2m_max", [0])[idx])),
+                    "temp_min": int(round(daily.get("temperature_2m_min", [0])[idx])),
+                    "uv_max": round(float(daily.get("uv_index_max", [0])[idx]), 1),
+                    "precip_probability": int(
+                        round(daily.get("precipitation_probability_max", [0])[idx])
+                    ),
+                }
+            )
 
-        now_h = datetime.now().hour
-        result = []
-
-        for i in range(now_h, min(now_h + 6, 24)):
-            time_str = data["time"][i]
-
-            hour_label = datetime.fromisoformat(time_str).strftime("%-I%p")
-
-            result.append({
-                "hour": hour_label,
-                "temp": int(data["temperature_2m"][i]),
-                "precip_prob": int(data["precipitation_probability"][i]),
-                "code": int(data["weathercode"][i]),
-            })
-
-        return result
-
-    except Exception as e:
-        logger.warning(f"[Weather] Open-Meteo error: {e}")
+        _set_cached(cache_key, forecast)
+        return forecast
+    except Exception as exc:
+        logger.warning("Forecast fetch failed: %s", exc)
         return []
 
 
-def uv_category(uv: float) -> tuple:
-    if uv <= 2:
-        return "Low", "text-green-400"
-    if uv <= 5:
-        return "Moderate", "text-yellow-400"
-    if uv <= 7:
-        return "High", "text-orange-400"
-    if uv <= 10:
-        return "Very High", "text-red-400"
-    return "Extreme", "text-purple-400"
+def get_weather_bundle(lat=None, lon=None, query=None) -> dict:
+    current = get_weather(lat=lat, lon=lon, query=query)
+    resolved_lat = current.get("lat", lat)
+    resolved_lon = current.get("lon", lon)
+    forecast = get_six_day_forecast(resolved_lat, resolved_lon)
+
+    return {
+        "current": current,
+        "forecast": forecast,
+        "location": {
+            "city": current.get("city", "Unknown"),
+            "lat": resolved_lat,
+            "lon": resolved_lon,
+        },
+    }

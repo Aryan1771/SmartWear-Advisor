@@ -3,27 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Login</title>
-
-  <link rel="stylesheet" href="/static/css/style.css">
+  <title>SmartWear Admin Login</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
+<body class="auth-body">
+  <main class="auth-card panel">
+    <p class="eyebrow">Admin access</p>
+    <h1>Sign in to SmartWear Admin</h1>
+    <p class="hero-text">Review registrations, detection history, and audit activity without exposing destructive controls.</p>
 
-<body style="display:flex; justify-content:center; align-items:center; height:100vh;">
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
 
-<div class="card">
+    <form class="auth-form" method="POST" action="/admin/login">
+      <label for="password">Admin password</label>
+      <input id="password" name="password" type="password" class="text-input" placeholder="Enter password" required>
+      <div class="action-row">
+        <button type="submit" class="btn btn-accent">Login</button>
+        <a href="/" class="btn btn-secondary">Back to scanner</a>
+      </div>
+    </form>
+  </main>
 
-  <h2>Admin Login</h2>
-
-  <form method="POST" action="/admin/login">
-    <input type="password" name="password" placeholder="Password" required>
-    <button type="submit" class="btn">Login</button>
-  </form>
-
-  <a href="/">← Back</a>
-
-</div>
-
-<script src="/static/js/ui.js"></script>
-
+  <script type="module">
+    import { initAppShell } from "{{ url_for('static', filename='js/ui.js') }}";
+    initAppShell();
+  </script>
 </body>
 </html>
