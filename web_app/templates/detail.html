@@ -2,157 +2,37 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#238636">
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Result | SmartWear</title>
 
-  <title>{{ name }} | SmartWear Advisor</title>
-
-  <link rel="manifest" href="/static/manifest.json">
   <link rel="stylesheet" href="/static/css/style.css">
-  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
 <body>
 
-<!-- ================= SIDEBAR ================= -->
-<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+<div class="main-content">
 
-<nav class="sidebar" id="sidebar">
-  <div class="sidebar-header">
-    <span class="sidebar-logo">SmartWear</span>
-    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">🌙</button>
-  </div>
+  <h1>Recognition Result</h1>
 
-  <div class="sidebar-nav">
-    <span class="sidebar-section-label">Navigation</span>
-
-    <a href="/" class="sidebar-item">
-      <span class="icon">🏠</span> Home
-    </a>
-
-    {% if admin_logged_in %}
-      <span class="sidebar-section-label" style="margin-top:8px;">Admin</span>
-
-      <a href="/admin/dashboard" class="sidebar-item">📊 Dashboard</a>
-      <a href="/admin/dashboard#users" class="sidebar-item">👥 Registered Faces</a>
-      <a href="/admin/dashboard#history" class="sidebar-item">🕒 Detection History</a>
-      <a href="/admin/export_csv" class="sidebar-item">📥 Export CSV</a>
-
-      <div class="sidebar-divider"></div>
-
-      <a href="/admin/logout" class="sidebar-item" style="color:var(--text-danger)">
-        🔓 Logout
-      </a>
-    {% else %}
-      <div class="sidebar-divider"></div>
-      <a href="/admin/login" class="sidebar-item">🔐 Admin Login</a>
-    {% endif %}
-  </div>
-
-  <div class="sidebar-footer">
-    <span style="font-size:11px; color:var(--text-secondary);">
-      SmartWear Advisor v2.0
-    </span>
-  </div>
-</nav>
-
-<button class="hamburger" onclick="toggleSidebar()">☰</button>
-
-<!-- ================= MAIN ================= -->
-<div class="main-content" id="main-content">
-
-  <div class="top-bar">
-    <h1 style="padding-left:44px;">Recognized: {{ name }}</h1>
-    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn-top">🌙</button>
-  </div>
-
-  <p style="color:var(--text-secondary); font-size:14px; margin-bottom:24px;">
-    Personalized weather & accessory analysis
-  </p>
-
-  <!-- Rain alert -->
-  {% for item in recs %}
-    {% if '☔' in item or '🌂' in item %}
-      <div class="flash-msg flash-info">{{ item }}</div>
-    {% endif %}
-  {% endfor %}
-
-  <!-- GRID -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-    <!-- USER -->
-    <div class="card">
-      <h2>User Details</h2>
-
-      <p>Name: <b>{{ name }}</b></p>
-      <p>Registered: {{ profile.registered_on or 'N/A' }}</p>
-      <p>Detections: {{ profile.detection_count or 0 }}</p>
-
-      <p style="margin-top:10px; font-style:italic;">
-        {{ profile.notes or 'Mobile Registration' }}
-      </p>
-    </div>
-
-    <!-- STATUS -->
-    <div class="card">
-      <h2>Detection Status</h2>
-
-      <p>Face Match: ✓ Confirmed</p>
-
-      <p>Mask: {{ acc.mask }}</p>
-      <p>Glasses: {{ acc.glasses }}</p>
-    </div>
-
-    <!-- WEATHER -->
-    <div class="card">
-      <h2>Local Environment</h2>
-
-      <p>City: {{ weather.city }}</p>
-      <p>Temp: {{ weather.temp }}°C</p>
-      <p>Humidity: {{ weather.humidity }}%</p>
-      <p>Condition: {{ weather.condition }}</p>
-
-      <p>UV: {{ weather.uv_index }} ({{ uv_label }})</p>
-
-      <p>AQI: {{ weather.aqi_label }} ({{ weather.aqi }}/5)</p>
-    </div>
-
-    <!-- RECOMMENDATIONS -->
-    <div class="card">
-      <h2>Smart Recommendations</h2>
-
-      <ul>
-        {% for item in recs %}
-          <li>✦ {{ item }}</li>
-        {% endfor %}
-      </ul>
-    </div>
-
-  </div>
-
-  <!-- FORECAST -->
-  {% if forecast %}
   <div class="card">
-    <h2>Hourly Forecast</h2>
-
-    {% for h in forecast %}
-      <div>
-        {{ h.hour }} - {{ h.temp }}° - {{ h.precip_prob }}%
-      </div>
-    {% endfor %}
+    <p><b>Name:</b> {{ name }}</p>
+    <p><b>Mask:</b> {{ mask }}</p>
+    <p><b>Glasses:</b> {{ glasses }}</p>
   </div>
-  {% endif %}
 
-  <div style="margin-top:20px;">
-    <a href="/" class="btn btn-primary">← Return to Live Camera</a>
+  <div class="card">
+    <p><b>City:</b> {{ weather.city }}</p>
+    <p><b>Temperature:</b> {{ weather.temp }}°C</p>
+    <p><b>Humidity:</b> {{ weather.humidity }}%</p>
+    <p><b>UV:</b> {{ weather.uv }}</p>
+    <p><b>AQI:</b> {{ weather.aqi_label }}</p>
   </div>
+
+  <a href="/" class="btn">← Back</a>
 
 </div>
 
-<!-- SCRIPTS -->
 <script src="/static/js/ui.js"></script>
-<script src="/static/js/app.js"></script>
 
 </body>
 </html>
