@@ -6,7 +6,11 @@ from utils.inference import run_inference
 from utils.weather import get_weather
 from utils.db import init_db, add_user, get_users, log_detection, get_history
 
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    template_folder="templates",
+    static_folder="static"
+)
 
 # 🔐 SECRET KEY (IMPORTANT)
 app.secret_key = os.environ.get("SECRET_KEY", "asdf")
