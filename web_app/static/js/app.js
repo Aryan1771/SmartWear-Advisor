@@ -83,11 +83,17 @@ async function loop(timestamp) {
   const frame = hiddenCanvas.toDataURL('image/jpeg', 0.6);
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    
     const res = await fetch('/process_frame', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: frame })
+      body: JSON.stringify({ image: frame }),
+      signal: controller.signal
     });
+
+    clearTimeout(timeout);
 
     const data = await res.json();
 
