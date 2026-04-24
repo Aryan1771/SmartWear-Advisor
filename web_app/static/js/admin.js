@@ -122,6 +122,7 @@ function applyHistoryFilters() {
   });
 
   renderHistory(state.filteredHistory);
+  updateActionAvailability();
 }
 
 function applyAuditFilters() {
@@ -131,6 +132,12 @@ function applyAuditFilters() {
     return !query || haystack.includes(query);
   });
   renderAudit(state.filteredAudit);
+}
+
+function updateActionAvailability() {
+  if (elements.deleteUserHistory) {
+    elements.deleteUserHistory.disabled = !elements.userSelect?.value;
+  }
 }
 
 function promptPassword(actionLabel) {
@@ -353,6 +360,7 @@ function bindActions() {
 renderUsers();
 renderHistory(state.filteredHistory);
 renderAudit(state.filteredAudit);
+updateActionAvailability();
 bindFilters();
 bindActions();
 void loadAnalytics();

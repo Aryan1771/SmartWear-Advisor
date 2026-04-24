@@ -78,6 +78,13 @@ def _to_int(value, default=0):
         return default
 
 
+def _format_admin_timestamp(value):
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    return raw.replace("T", " ").split(".")[0]
+
+
 def _apply_query_filter(rows, query: str, keys):
     normalized = str(query or "").strip().lower()
     if not normalized:
@@ -325,7 +332,7 @@ def get_dashboard_stats():
     return {
         "total_users": len(users),
         "total_detections": detection_total,
-        "recent_activity": history[0]["timestamp"] if history else None,
+        "recent_activity": _format_admin_timestamp(history[0]["timestamp"]) if history else None,
         "audit_events": audit_total,
         "retention_days": RETENTION_DAYS,
     }

@@ -71,6 +71,11 @@ select {
   display: grid;
   grid-template-columns: 280px 1fr;
   min-height: 100vh;
+  transition: grid-template-columns 0.22s ease;
+}
+
+.app-shell.sidebar-hidden {
+  grid-template-columns: 1fr;
 }
 
 .sidebar {
@@ -84,6 +89,15 @@ select {
   background: rgba(6, 14, 27, 0.72);
   border-right: 1px solid var(--line);
   backdrop-filter: blur(20px);
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+.sidebar.desktop-hidden {
+  position: fixed;
+  left: 0;
+  z-index: 30;
+  transform: translateX(-102%);
+  opacity: 0;
 }
 
 .sidebar-brand,
@@ -209,6 +223,12 @@ select {
   padding: 0.7rem 1rem;
   cursor: pointer;
   transition: 0.2s ease;
+}
+
+.topbar .icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .icon-button:hover,
@@ -617,6 +637,13 @@ select {
 
   .camera-shell {
     min-height: 420px;
+  }
+}
+
+@media (min-width: 901px) {
+  .sidebar.desktop-hidden {
+    width: 280px;
+    height: 100vh;
   }
 }
 

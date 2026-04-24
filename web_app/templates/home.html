@@ -26,7 +26,7 @@
           <p class="sidebar-weather-city" data-weather-city>Weather</p>
           <strong class="sidebar-weather-status" data-weather-status>Loading local weather...</strong>
           <p class="sidebar-weather-meta" data-weather-meta-primary>Humidity --</p>
-          <p class="sidebar-weather-meta" data-weather-meta-secondary>AQI -- · UV --</p>
+          <p class="sidebar-weather-meta" data-weather-meta-secondary>AQI -- | UV --</p>
         </div>
         <button type="button" class="btn btn-secondary btn-block" data-install-button hidden>Install App</button>
       </div>
@@ -47,7 +47,7 @@
         <div class="panel hero-copy">
           <span class="panel-pill">Frontend stabilized</span>
           <h2>Keep the face inside the guide. Recognition pauses only after a longer scan window if no match is found.</h2>
-          <p class="hero-text">The camera stays local, requests are throttled, and the Hugging Face endpoint is not hammered when a face stays unknown. Register only when you want to enroll a new user.</p>
+          <p class="hero-text">Scan normally to check your identity, glasses, and mask status with weather-aware guidance. If your face is new, use Register once to save it for future visits.</p>
           <div class="status-stack">
             <div class="status-card">
               <span class="status-label">Recognition status</span>
@@ -80,7 +80,7 @@
             <button id="register-button" type="button" class="btn btn-accent">Register</button>
           </div>
 
-          <p class="helper-text">If the face is not recognized after several seconds of scanning, the app pauses safely and waits for registration instead of continuing to send frames forever.</p>
+          <p class="helper-text">If your face is not recognized after a short scan, the app pauses and invites you to register instead of keeping the camera requests running.</p>
         </div>
       </section>
     </main>

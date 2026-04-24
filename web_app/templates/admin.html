@@ -30,7 +30,7 @@
           <p class="sidebar-weather-city" data-weather-city>Weather</p>
           <strong class="sidebar-weather-status" data-weather-status>Loading local weather...</strong>
           <p class="sidebar-weather-meta" data-weather-meta-primary>Humidity --</p>
-          <p class="sidebar-weather-meta" data-weather-meta-secondary>AQI -- · UV --</p>
+          <p class="sidebar-weather-meta" data-weather-meta-secondary>AQI -- | UV --</p>
         </div>
       </div>
     </aside>
@@ -173,6 +173,7 @@
   </div>
 
   <script id="admin-payload" type="application/json">{{ admin_payload|safe }}</script>
+  <div id="toast-root" class="toast-root"></div>
   <script type="module" src="{{ url_for('static', filename='js/admin.js') }}"></script>
 </body>
 </html>

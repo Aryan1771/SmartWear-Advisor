@@ -21,15 +21,26 @@ export function initTheme() {
 }
 
 export function toggleSidebar(forceOpen) {
+  const shell = document.querySelector(".app-shell");
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("sidebar-overlay");
   if (!sidebar) {
     return;
   }
 
+  const desktop = window.innerWidth > 900;
   const willOpen = typeof forceOpen === "boolean"
     ? forceOpen
-    : !sidebar.classList.contains("mobile-open");
+    : desktop
+      ? sidebar.classList.contains("desktop-hidden")
+      : !sidebar.classList.contains("mobile-open");
+
+  if (desktop) {
+    sidebar.classList.toggle("desktop-hidden", !willOpen);
+    shell?.classList.toggle("sidebar-hidden", !willOpen);
+    overlay?.classList.remove("visible");
+    return;
+  }
 
   sidebar.classList.toggle("mobile-open", willOpen);
   overlay?.classList.toggle("visible", willOpen);
@@ -77,9 +88,25 @@ export function bindChrome() {
     button.addEventListener("click", toggleTheme);
   });
   document.querySelectorAll("[data-sidebar-open]").forEach((button) => {
-    button.addEventListener("click", () => toggleSidebar(true));
+    button.addEventListener("click", () => toggleSidebar());
   });
   document.getElementById("sidebar-overlay")?.addEventListener("click", () => toggleSidebar(false));
+  window.addEventListener("resize", () => {
+    const shell = document.querySelector(".app-shell");
+    const sidebar = document.getElementById("sidebar");
+    const overlay = document.getElementById("sidebar-overlay");
+    if (!sidebar) {
+      return;
+    }
+
+    if (window.innerWidth > 900) {
+      sidebar.classList.remove("mobile-open");
+      overlay?.classList.remove("visible");
+    } else {
+      sidebar.classList.remove("desktop-hidden");
+      shell?.classList.remove("sidebar-hidden");
+    }
+  });
 }
 
 export function bindInstallPrompt() {
@@ -146,13 +173,13 @@ export async function loadSidebarWeather(coords = null) {
       city.textContent = payload.city || "Unknown";
     }
     if (status) {
-      status.textContent = `${payload.temp ?? "--"}°C · ${payload.condition || "Unavailable"}`;
+      status.textContent = `${payload.temp ?? "--"} C | ${payload.condition || "Unavailable"}`;
     }
     if (metaPrimary) {
       metaPrimary.textContent = `Humidity ${payload.humidity ?? "--"}%`;
     }
     if (metaSecondary) {
-      metaSecondary.textContent = `AQI ${payload.aqi_label || "--"} · UV ${payload.uv_index ?? "--"}`;
+      metaSecondary.textContent = `AQI ${payload.aqi_label || "--"} | UV ${payload.uv_index ?? "--"}`;
     }
   } catch (error) {
     if (status) {
