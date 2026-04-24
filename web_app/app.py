@@ -1,18 +1,28 @@
 import json
 import os
+from csv import DictWriter
+from io import StringIO
 from pathlib import Path
 
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for
 
 from backend.db import (
     add_user,
+    clear_audit_history,
+    clear_detection_history,
+    filter_audit_rows,
+    filter_history_rows,
     get_audit_log,
+    get_detection_chart_data,
     get_dashboard_stats,
     get_detection_history,
     get_users,
     init_db,
     log_audit,
     log_detection,
+    maintain_log_retention,
+    prepare_audit_export_rows,
+    prepare_history_export_rows,
 )
 from backend.recommendation_engine import generate_recommendation
 from backend.weather_api import get_weather_bundle
@@ -20,7 +30,7 @@ from utils.inference import register_face, run_inference
 
 BASE_DIR = Path(__file__).resolve().parent
 MAX_IMAGE_SIZE = 700_000
-ADMIN_HISTORY_LIMIT = 200
+ADMIN_DETAIL_LIMIT = 20
 
 app = Flask(
     __name__,
@@ -63,6 +73,22 @@ def _admin_required():
     if session.get("admin"):
         return None
     return redirect(url_for("admin_login"))
+
+
+def _admin_password_valid(password: str):
+    return bool(password) and password == ADMIN_PASSWORD
+
+
+def _csv_response(filename: str, fieldnames: list, rows: list):
+    buffer = StringIO()
+    writer = DictWriter(buffer, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerows(rows)
+    return Response(
+        buffer.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.route("/ping")
@@ -232,9 +258,10 @@ def admin():
         return guard
 
     try:
+        maintain_log_retention()
         users = get_users()
-        history = get_detection_history(limit=ADMIN_HISTORY_LIMIT)
-        audit_logs = get_audit_log(limit=ADMIN_HISTORY_LIMIT)
+        history = get_detection_history(limit=ADMIN_DETAIL_LIMIT)
+        audit_logs = get_audit_log(limit=ADMIN_DETAIL_LIMIT)
         stats = get_dashboard_stats()
     except Exception as exc:
         print(f"[APP] admin load failed: {exc}")
@@ -252,6 +279,7 @@ def admin():
                 "history": history,
                 "audit_logs": audit_logs,
                 "stats": stats,
+                "detail_limit": ADMIN_DETAIL_LIMIT,
             }
         ),
     )
@@ -264,18 +292,113 @@ def analytics():
         return guard
 
     try:
-        history = get_detection_history(limit=ADMIN_HISTORY_LIMIT)
-    except Exception:
-        history = []
+        maintain_log_retention()
+        chart_data = get_detection_chart_data()
+    except Exception as exc:
+        print(f"[APP] analytics load failed: {exc}")
+        chart_data = {"days": [], "detections": []}
 
-    day_map = {}
-    for item in history:
-        day = str(item.get("timestamp", ""))[:10]
-        if day:
-            day_map[day] = day_map.get(day, 0) + 1
+    return jsonify(chart_data)
 
-    days = sorted(day_map)
-    return jsonify({"days": days, "detections": [day_map[day] for day in days]})
+
+@app.route("/admin/export/history", methods=["POST"])
+def export_history():
+    guard = _admin_required()
+    if guard:
+        return guard
+
+    data = request.get_json(silent=True) or {}
+    rows = prepare_history_export_rows(filter_history_rows(data.get("rows") or [], data.get("query"), data.get("user")))
+    return _csv_response(
+        "smartwear-history.csv",
+        ["name", "timestamp", "mask", "glasses", "city", "temp", "feels_like", "aqi", "aqi_label", "uv_index"],
+        rows,
+    )
+
+
+@app.route("/admin/export/audit", methods=["POST"])
+def export_audit():
+    guard = _admin_required()
+    if guard:
+        return guard
+
+    data = request.get_json(silent=True) or {}
+    rows = prepare_audit_export_rows(filter_audit_rows(data.get("rows") or [], data.get("query")))
+    return _csv_response(
+        "smartwear-audit.csv",
+        ["timestamp", "event", "detail", "ip"],
+        rows,
+    )
+
+
+@app.route("/admin/history/delete-all", methods=["POST"])
+def delete_all_history():
+    guard = _admin_required()
+    if guard:
+        return guard
+
+    data = request.get_json(silent=True) or {}
+    if not _admin_password_valid(data.get("password", "")):
+        return jsonify({"success": False, "error": "invalid_password"}), 403
+
+    if not clear_detection_history():
+        return jsonify({"success": False, "error": "delete_failed"}), 500
+
+    log_audit("admin_history_cleared", "Admin cleared all detection history", _client_ip())
+    return jsonify({"success": True})
+
+
+@app.route("/admin/history/delete-user", methods=["POST"])
+def delete_user_history():
+    guard = _admin_required()
+    if guard:
+        return guard
+
+    data = request.get_json(silent=True) or {}
+    if not _admin_password_valid(data.get("password", "")):
+        return jsonify({"success": False, "error": "invalid_password"}), 403
+
+    name = str(data.get("name", "")).strip()
+    if not name:
+        return jsonify({"success": False, "error": "missing_name"}), 400
+
+    if not clear_detection_history(name=name):
+        return jsonify({"success": False, "error": "delete_failed"}), 500
+
+    log_audit("admin_user_history_cleared", f"Admin cleared detection history for {name}", _client_ip())
+    return jsonify({"success": True, "name": name})
+
+
+@app.route("/admin/audit/delete-all", methods=["POST"])
+def delete_all_audit():
+    guard = _admin_required()
+    if guard:
+        return guard
+
+    data = request.get_json(silent=True) or {}
+    if not _admin_password_valid(data.get("password", "")):
+        return jsonify({"success": False, "error": "invalid_password"}), 403
+
+    if not clear_audit_history():
+        return jsonify({"success": False, "error": "delete_failed"}), 500
+
+    print(f"[ADMIN] Audit history cleared by {_client_ip()}")
+    return jsonify({"success": True})
+
+
+@app.route("/admin/retention/run", methods=["POST"])
+def run_retention():
+    guard = _admin_required()
+    if guard:
+        return guard
+
+    data = request.get_json(silent=True) or {}
+    if not _admin_password_valid(data.get("password", "")):
+        return jsonify({"success": False, "error": "invalid_password"}), 403
+
+    maintain_log_retention()
+    log_audit("admin_retention_run", "Admin triggered retention cleanup", _client_ip())
+    return jsonify({"success": True})
 
 
 @app.route("/admin/logout")

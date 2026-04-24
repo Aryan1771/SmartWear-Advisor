@@ -25,7 +25,7 @@
         <a class="sidebar-link" href="/admin/logout">Logout</a>
       </nav>
       <div class="sidebar-footer">
-        <p>Read-only analytics panel with safe filters.</p>
+        <p>Exports, retention controls, and password-confirmed cleanup live here.</p>
         <div class="sidebar-weather" data-sidebar-weather>
           <p class="sidebar-weather-city" data-weather-city>Weather</p>
           <strong class="sidebar-weather-status" data-weather-status>Loading local weather...</strong>
@@ -71,7 +71,11 @@
             <p class="eyebrow">Usage trend</p>
             <h2>Detections over time</h2>
           </div>
+          <div class="toolbar toolbar-actions">
+            <button id="run-retention" type="button" class="btn btn-secondary">Run 30-day cleanup</button>
+          </div>
         </div>
+        <p class="helper-text section-note">Detailed tables keep the latest {{ stats.retention_days }} days and show only the newest {{ detail_limit }} raw rows. Older activity is preserved as daily totals for analytics.</p>
         <div class="chart-wrap">
           <canvas id="trendChart"></canvas>
         </div>
@@ -113,8 +117,12 @@
               {% endfor %}
             </select>
             <input id="history-search" class="text-input compact-input" type="search" placeholder="Search name, accessories, city">
+            <button id="export-history" type="button" class="btn btn-secondary">Export CSV</button>
+            <button id="delete-user-history" type="button" class="btn btn-secondary">Delete selected user history</button>
+            <button id="delete-all-history" type="button" class="btn btn-danger">Clear all history</button>
           </div>
         </div>
+        <p class="helper-text section-note">Exports follow the current filters. Destructive actions always prompt for the admin password again.</p>
         <div class="table-wrap">
           <table class="data-table">
             <thead>
@@ -142,8 +150,11 @@
           </div>
           <div class="toolbar">
             <input id="audit-search" class="text-input compact-input" type="search" placeholder="Search event, detail, ip">
+            <button id="export-audit" type="button" class="btn btn-secondary">Export CSV</button>
+            <button id="delete-all-audit" type="button" class="btn btn-danger">Clear audit log</button>
           </div>
         </div>
+        <p class="helper-text section-note">Only the latest {{ detail_limit }} raw audit rows are shown here; older entries are summarized into totals after {{ stats.retention_days }} days.</p>
         <div class="table-wrap">
           <table class="data-table">
             <thead>

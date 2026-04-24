@@ -12,9 +12,9 @@ SmartWear Advisor is a Flask web app that captures a face, sends lightweight fra
 ## Core behavior
 
 - Recognition requests are throttled to reduce Render memory pressure.
-- If a face is not recognized within 2 seconds, inference stops and remains paused until `Register` is used.
+- If a face is not recognized within the live scan window, inference stops and remains paused until `Register` is used.
 - Registration is a one-shot capture flow with payload size checks.
-- Admin is read-only in this repo: user list, detection history, audit logs, and analytics.
+- Admin can export CSV files, clear logs with password confirmation, and keep long-term analytics through 30-day rollups.
 
 ## Important environment variables
 
