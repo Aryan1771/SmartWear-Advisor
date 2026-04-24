@@ -2,212 +2,66 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#238636">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SmartWear Advisor</title>
+
   <link rel="manifest" href="/static/manifest.json">
   <link rel="stylesheet" href="/static/css/style.css">
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- MediaPipe Face Mesh for blink/liveness detection -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"
-          crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
-          crossorigin="anonymous"></script>
 </head>
 
 <body>
 
-<!-- ══════════════════ SIDEBAR ══════════════════ -->
-<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
-
-<nav class="sidebar" id="sidebar">
+<!-- Sidebar -->
+<nav id="sidebar" class="sidebar">
   <div class="sidebar-header">
-    <span class="sidebar-logo">SmartWear</span>
-    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode" id="theme-btn">🌙</button>
+    <span>SmartWear</span>
+    <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
   </div>
 
-  <div class="sidebar-nav">
-    <span class="sidebar-section-label">Navigation</span>
-
-    <a href="/" class="sidebar-item active">
-      <span class="icon">🏠</span> Home
-    </a>
-
-    {% if admin_logged_in %}
-    <!-- Admin-only items -->
-    <span class="sidebar-section-label" style="margin-top:8px;">Admin</span>
-
-    <a href="/admin/dashboard" class="sidebar-item">
-      <span class="icon">📊</span> Dashboard
-    </a>
-
-    <a href="/admin/dashboard#users" class="sidebar-item">
-      <span class="icon">👥</span> Registered Faces
-    </a>
-
-    <a href="/admin/dashboard#history" class="sidebar-item">
-      <span class="icon">🕒</span> Detection History
-    </a>
-
-    <a href="/admin/export_csv" class="sidebar-item">
-      <span class="icon">📥</span> Export CSV
-    </a>
-
-    <div class="sidebar-divider"></div>
-
-    <a href="/admin/logout" class="sidebar-item" style="color:var(--text-danger)">
-      <span class="icon">🔓</span> Logout
-    </a>
-    {% else %}
-    <div class="sidebar-divider"></div>
-    <a href="/admin/login" class="sidebar-item">
-      <span class="icon">🔐</span> Admin Login
-    </a>
-    {% endif %}
-  </div>
-
-  <div class="sidebar-footer">
-    <span style="font-size:11px; color:var(--text-secondary);">SmartWear Advisor v2.0</span>
-  </div>
+  <a href="/">🏠 Home</a>
+  <a href="/admin/login">🔐 Admin</a>
 </nav>
 
-<!-- ══════════════════ HAMBURGER ══════════════════ -->
-<button class="hamburger" id="hamburger" onclick="toggleSidebar()" title="Toggle menu">☰</button>
+<button class="hamburger" onclick="toggleSidebar()">☰</button>
 
-<!-- ══════════════════ MAIN CONTENT ══════════════════ -->
-<div class="main-content" id="main-content">
+<!-- Main -->
+<div class="main-content">
 
-  <!-- Flash messages (from Flask session) -->
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for cat, msg in messages %}
-        <div class="flash-msg flash-{{ cat }}">{{ msg }}</div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
+  <h1>SmartWear Advisor</h1>
 
-  <div class="top-bar">
-    <h1>SmartWear Advisor
-      <span style="font-size:12px; font-weight:400; color:var(--text-info); margin-left:8px;">Remote</span>
-    </h1>
-    <div style="display:flex; gap:8px; align-items:center;">
-      <!-- PWA install button (shown by JS when installable) -->
-      <button id="pwa-install-btn" class="btn btn-primary" style="display:none; font-size:12px;"
-              onclick="installPWA()">📲 Install App</button>
-    </div>
+  <p id="status-text">Idle</p>
+  <p id="location-msg">Getting location...</p>
+
+  <!-- Camera -->
+  <div class="camera-container">
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="overlay"></canvas>
   </div>
 
-  <!-- ── Main grid ───────────────────────────────────────── -->
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+  <canvas id="hidden-canvas" style="display:none;"></canvas>
 
-    <!-- Camera panel -->
-    <div class="lg:col-span-2 panel">
-      <div class="relative" style="aspect-ratio:16/9; background:#000;">
-        <video id="webcam" autoplay playsinline
-               style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;"></video>
-        <canvas id="overlay"
-                style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></canvas>
-        <canvas id="hidden-canvas" style="display:none;"></canvas>
+  <!-- Info -->
+  <h2 id="name-display">---</h2>
+  <p id="acc-display">---</p>
 
-        <!-- Offline placeholder -->
-        <div id="offline-ui"
-             style="position:absolute; inset:0; background:rgba(0,0,0,0.75);
-                    display:flex; align-items:center; justify-content:center; z-index:20;">
-          <p style="color:var(--text-secondary);">Camera Paused</p>
-        </div>
-
-        <!-- Liveness challenge overlay -->
-        <div id="liveness-overlay" class="liveness-overlay" style="display:none;">
-          <div class="liveness-ring" id="liveness-ring"></div>
-          <p id="liveness-msg" style="color:#f0f6fc; font-size:15px; font-weight:600;">
-            Please blink once to verify
-          </p>
-          <p style="color:#8b949e; font-size:12px; margin-top:6px;">
-            Anti-spoofing check
-          </p>
-          <button onclick="cancelLiveness()"
-                  style="margin-top:16px; background:transparent; border:1px solid #30363d;
-                         color:#8b949e; border-radius:6px; padding:6px 16px; cursor:pointer;">
-            Cancel
-          </button>
-        </div>
-      </div>
-
-      <!-- Status bar -->
-      <div style="padding:10px 16px; display:flex; justify-content:space-between;
-                  align-items:center; font-size:13px; background:var(--bg-primary);
-                  border-top:1px solid var(--border);">
-        <span style="display:flex; align-items:center; gap:8px;">
-          <span class="pulse-dot" id="pulse"></span>
-          <span id="status-text">Ready</span>
-        </span>
-        <span id="location-msg" style="color:var(--text-info); font-family:monospace;">
-          GPS Locating...
-        </span>
-      </div>
-    </div>
-
-    <!-- Controls panel -->
-    <div style="display:flex; flex-direction:column; gap:16px;">
-
-      <!-- Controls card -->
-      <div class="card">
-        <h2 style="font-weight:700; font-size:14px; margin-bottom:14px; color:var(--text-primary);">
-          Controls
-        </h2>
-        <label style="font-size:12px; color:var(--text-secondary); margin-bottom:4px; display:block;">
-          City / Location
-        </label>
-        <input type="text" id="city" value="Ghaziabad" class="input-field" style="margin-bottom:12px;">
-
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
-          <button onclick="startApp()" class="btn btn-success">▶ Start</button>
-          <button onclick="stopApp()"  class="btn btn-danger">■ Stop</button>
-        </div>
-        <button onclick="beginRegistration()"
-                class="btn btn-outline-info" style="width:100%;">
-          👤 Register Profile
-        </button>
-      </div>
-
-      <!-- Identity status card -->
-      <div class="card" style="background:var(--bg-card); border-color: rgba(88,166,255,0.3);">
-        <p style="font-size:10px; font-weight:700; letter-spacing:0.1em;
-                  text-transform:uppercase; color:var(--text-secondary);">
-          Identity Status
-        </p>
-        <p id="name-display" style="font-size:22px; margin-top:6px;
-                                    color:var(--text-info); font-style:italic;">
-          Scanning...
-        </p>
-        <p style="font-size:10px; font-weight:700; letter-spacing:0.1em;
-                  text-transform:uppercase; color:var(--text-secondary); margin-top:14px;">
-          Accessory Detected
-        </p>
-        <p id="acc-display" style="font-size:13px; margin-top:4px; color:var(--text-secondary);">
-          —
-        </p>
-      </div>
-
-    </div>
+  <!-- Controls -->
+  <div class="controls">
+    <button onclick="startApp()" class="btn">Start</button>
+    <button onclick="stopApp()" class="btn">Stop</button>
+    <button onclick="registerUser()" class="btn btn-success">Register</button>
   </div>
-  <!-- /grid -->
 
 </div>
-<script type="module">
-import { startApp, stopApp, registerUser } from "/static/js/app.js";
-import { toggleSidebar, toggleTheme, initTheme, installPWA } from "/static/js/ui.js";
 
-window.startApp = startApp;
-window.stopApp = stopApp;
-window.registerUser = registerUser;
-window.toggleSidebar = toggleSidebar;
-window.toggleTheme = toggleTheme;
-window.installPWA = installPWA;
+<script src="/static/js/ui.js"></script>
+<script src="/static/js/app.js"></script>
 
-initTheme();
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/js/sw.js');
+}
 </script>
 
 </body>
