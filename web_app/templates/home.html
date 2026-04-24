@@ -13,11 +13,10 @@
 
 <body>
 
-<!-- Sidebar -->
 <nav id="sidebar" class="sidebar">
   <div class="sidebar-header">
     <span>SmartWear</span>
-    <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+    <button onclick="toggleTheme()">🌙</button>
   </div>
 
   <a href="/">🏠 Home</a>
@@ -26,15 +25,12 @@
 
 <button class="hamburger" onclick="toggleSidebar()">☰</button>
 
-<!-- Main -->
 <div class="main-content">
-
   <h1>SmartWear Advisor</h1>
 
   <p id="status-text">Idle</p>
   <p id="location-msg">Getting location...</p>
 
-  <!-- Camera -->
   <div class="camera-container">
     <video id="webcam" autoplay playsinline></video>
     <canvas id="overlay"></canvas>
@@ -42,21 +38,27 @@
 
   <canvas id="hidden-canvas" style="display:none;"></canvas>
 
-  <!-- Info -->
   <h2 id="name-display">---</h2>
   <p id="acc-display">---</p>
 
-  <!-- Controls -->
   <div class="controls">
-    <button onclick="startApp()" class="btn">Start</button>
-    <button onclick="stopApp()" class="btn">Stop</button>
-    <button onclick="registerUser()" class="btn btn-success">Register</button>
+    <button onclick="startApp()">Start</button>
+    <button onclick="stopApp()">Stop</button>
+    <button onclick="registerUser()">Register</button>
   </div>
-
 </div>
 
-<script src="/static/js/ui.js"></script>
-<script src="/static/js/app.js"></script>
+<!-- ✅ MODULE FIX -->
+<script type="module">
+  import { startApp, stopApp, registerUser } from '/static/js/app.js';
+  import { toggleTheme, toggleSidebar } from '/static/js/ui.js';
+
+  window.startApp = startApp;
+  window.stopApp = stopApp;
+  window.registerUser = registerUser;
+  window.toggleTheme = toggleTheme;
+  window.toggleSidebar = toggleSidebar;
+</script>
 
 <script>
 if ('serviceWorker' in navigator) {
