@@ -1,58 +1,52 @@
-// ===================== SMARTWEAR UI CORE =====================
+// ===================== UI CORE =====================
 
+// THEME
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
 
-// ===================== THEME =====================
+  const icon = theme === "dark" ? "🌙" : "☀️";
+
+  document.querySelectorAll(".theme-toggle").forEach(btn => {
+    btn.textContent = icon;
+  });
+}
+
 function toggleTheme() {
-  const html = document.documentElement;
-
-  const current = html.getAttribute("data-theme") || "dark";
+  const current = document.documentElement.getAttribute("data-theme") || "dark";
   const next = current === "dark" ? "light" : "dark";
 
-  html.setAttribute("data-theme", next);
   localStorage.setItem("theme", next);
+  applyTheme(next);
 }
 
-function initTheme() {
-  const saved = localStorage.getItem("theme") || "dark";
-  document.documentElement.setAttribute("data-theme", saved);
-}
+(function initTheme() {
+  applyTheme(localStorage.getItem("theme") || "dark");
+})();
 
 
-// ===================== SIDEBAR =====================
+// SIDEBAR
 function toggleSidebar() {
   const sidebar = document.getElementById("sidebar");
-  if (!sidebar) return;
-
-  sidebar.classList.toggle("collapsed");
+  if (sidebar) sidebar.classList.toggle("collapsed");
 }
 
 
-// ===================== STATUS HELPERS =====================
+// SCROLL
+function scrollToSection(id) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+}
+
+
+// STATUS
 function updateStatus(text) {
   const el = document.getElementById("status-text");
-  if (!el) return;
-
-  el.textContent = text;
+  if (el) el.textContent = text;
 }
 
 function updateLocation(text) {
   const el = document.getElementById("location-msg");
-  if (!el) return;
-
-  el.textContent = text;
+  if (el) el.textContent = text;
 }
-
-
-// ===================== PWA INSTALL =====================
-let deferredPrompt = null;
-
-window.addEventListener("beforeinstallprompt", (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-
-  const btn = document.getElementById("pwa-install-btn");
-  if (btn) btn.style.display = "block";
-});
 
 function installPWA() {
   if (!deferredPrompt) return;
@@ -63,21 +57,10 @@ function installPWA() {
     deferredPrompt = null;
   });
 }
-
-
-// ===================== INIT =====================
-(function initUI() {
-  initTheme();
-  console.log("UI module loaded");
-})();
-
-
-// ===================== SAFE GLOBAL EXPORT =====================
-// (so it works even without type="module")
-
+// EXPORT GLOBAL
 window.toggleTheme = toggleTheme;
-window.initTheme = initTheme;
 window.toggleSidebar = toggleSidebar;
+window.scrollToSection = scrollToSection;
 window.updateStatus = updateStatus;
 window.updateLocation = updateLocation;
 window.installPWA = installPWA;
