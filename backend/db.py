@@ -226,3 +226,26 @@ def get_audit_log(limit: int = 100):
             print(f"[DB] get_audit_log error: {e}")
             return []
     return _mem_audit[:limit]
+def add_user(name, image=None):
+    # image is ignored here (HF handles embeddings)
+    add_user_to_db(name)
+
+
+def get_users():
+    return get_all_users()
+
+
+def get_history():
+    return get_detection_history()
+
+
+def log_detection_legacy(result):
+    """
+    For compatibility if old code sends full result dict
+    """
+    log_detection(
+        name=result.get("name"),
+        mask=result.get("mask"),
+        glasses=result.get("glasses"),
+        weather=result.get("weather", {})
+    )
