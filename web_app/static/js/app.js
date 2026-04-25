@@ -20,6 +20,7 @@ const state = {
   lastRequestAt: 0,
   recognitionStartedAt: 0,
   coords: { lat: null, lon: null },
+  weather: null,
   frameLoopId: null,
 };
 
@@ -145,13 +146,14 @@ async function detectFrame() {
   setMode("processing");
 
   const image = captureFrame(CAMERA.jpegQuality);
+  const weather = state.weather || {};
   try {
     const response = await fetchWithTimeout(
       "/process_frame",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image }),
+        body: JSON.stringify({ image, weather }),
       },
       CAMERA.requestTimeoutMs
     );
@@ -236,6 +238,7 @@ function loop(timestamp) {
 async function requestLocation() {
   if (!navigator.geolocation) {
     setLocationStatus("Location unavailable on this device.");
+    await refreshDetectionWeather();
     return;
   }
 
@@ -245,13 +248,41 @@ async function requestLocation() {
       state.coords.lon = Number(position.coords.longitude.toFixed(6));
       setLocationStatus("Location locked for weather-aware recommendations.");
       void loadSidebarWeather(state.coords);
+      void refreshDetectionWeather();
     },
     () => {
       setLocationStatus("Location blocked. Weather details will use safe fallback data.");
       void loadSidebarWeather();
+      void refreshDetectionWeather();
     },
     { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
   );
+}
+
+async function refreshDetectionWeather() {
+  const params = new URLSearchParams();
+  if (state.coords.lat != null && state.coords.lon != null) {
+    params.set("lat", String(state.coords.lat));
+    params.set("lon", String(state.coords.lon));
+  }
+
+  try {
+    const response = await fetch(`/api/sidebar-weather${params.toString() ? `?${params.toString()}` : ""}`);
+    if (!response.ok) {
+      return;
+    }
+    const payload = await response.json();
+    state.weather = {
+      city: payload.city || "",
+      temp: Number(payload.temp || 0),
+      feels_like: Number(payload.temp || 0),
+      humidity: Number(payload.humidity || 0),
+      aqi_label: payload.aqi_label || "",
+      uv_index: Number(payload.uv_index || 0),
+    };
+  } catch (error) {
+    state.weather = null;
+  }
 }
 
 async function startCamera() {

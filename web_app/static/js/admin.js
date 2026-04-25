@@ -33,6 +33,10 @@ function formatCell(value) {
   return value == null || value === "" ? "-" : String(value);
 }
 
+function formatMetric(value) {
+  return value == null || value === "" || Number(value) === 0 ? "-" : String(value);
+}
+
 function emptyRow(colspan, message) {
   return `<tr><td class="table-empty" colspan="${colspan}">${message}</td></tr>`;
 }
@@ -72,9 +76,9 @@ function renderHistory(rows) {
           <td>${formatCell(item.mask)}</td>
           <td>${formatCell(item.glasses)}</td>
           <td>${formatCell(item.city)}</td>
-          <td>${formatCell(item.temp)}</td>
+          <td>${formatMetric(item.temp)}</td>
           <td>${formatCell(item.aqi_label)}</td>
-          <td>${formatCell(item.uv_index)}</td>
+          <td>${formatMetric(item.uv_index)}</td>
         </tr>
       `
     )

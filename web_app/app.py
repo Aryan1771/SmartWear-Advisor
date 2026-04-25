@@ -140,6 +140,12 @@ def process_frame():
 
     if result["recognized"]:
         weather = data.get("weather") or {}
+        if not weather.get("city"):
+            try:
+                weather = get_weather_bundle()["current"]
+            except Exception as exc:
+                print(f"[APP] detection weather fallback failed: {exc}")
+                weather = {}
         try:
             log_detection(result["name"], result["mask"], result["glasses"], weather)
         except Exception as exc:
