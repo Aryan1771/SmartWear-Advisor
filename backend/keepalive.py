@@ -1,71 +1,47 @@
-# keepalive.py (PRODUCTION READY)
-
+import logging
 import os
 import threading
 import time
-import requests
-import logging
 
-# ── Logging ─────────────────────────────────────────────
+import requests
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("KEEPALIVE")
 
-# ── Config ──────────────────────────────────────────────
-HF_SPACE_URL = os.getenv("HF_SPACE_URL", "").rstrip("/")
-RENDER_URL   = os.getenv("RENDER_URL", "").rstrip("/")
-HF_TOKEN     = os.getenv("HF_TOKEN", "")
+HF_SPACE_URL = os.getenv("HF_SPACE_URL", os.getenv("HF_API_URL", "")).rstrip("/")
+RENDER_URL = os.getenv("RENDER_URL", "").rstrip("/")
+HF_TOKEN = os.getenv("HF_TOKEN", os.getenv("HF_API_TOKEN", ""))
 
-HF_PING_INTERVAL     = 20 * 60
-RENDER_PING_INTERVAL = 10 * 60
-PING_TIMEOUT         = 10  # reduced slightly
+KEEPALIVE_ENABLED = os.getenv("ENABLE_KEEPALIVE", "true").lower() in {"1", "true", "yes", "on"}
+HF_PING_INTERVAL = int(os.getenv("HF_PING_INTERVAL_SECONDS", str(12 * 60)))
+RENDER_PING_INTERVAL = int(os.getenv("RENDER_PING_INTERVAL_SECONDS", str(12 * 60)))
+PING_TIMEOUT = int(os.getenv("KEEPALIVE_TIMEOUT_SECONDS", "10"))
 
-# ── Session (IMPORTANT) ─────────────────────────────────
 _session = requests.Session()
-
 _started = False
 _lock = threading.Lock()
 
 
-# ── Internal Ping Function ──────────────────────────────
 def _safe_ping(url, headers=None, name="Service"):
     try:
-        r = _session.get(url, headers=headers or {}, timeout=PING_TIMEOUT)
-        logger.info(f"[Keepalive] {name} → {r.status_code}")
-    except Exception as e:
-        logger.warning(f"[Keepalive] {name} ping failed: {e}")
+        response = _session.get(url, headers=headers or {}, timeout=PING_TIMEOUT)
+        logger.info("[Keepalive] %s ping -> %s", name, response.status_code)
+    except Exception as exc:
+        logger.warning("[Keepalive] %s ping failed: %s", name, exc)
 
 
-# ── HF Loop ─────────────────────────────────────────────
-def _ping_hf_loop():
-    time.sleep(10)  # 🔥 startup delay
+def _loop(url, interval, name, headers=None):
     while True:
-        time.sleep(HF_PING_INTERVAL)
-
-        if not HF_SPACE_URL:
-            continue
-
-        headers = {}
-        if HF_TOKEN:
-            headers["Authorization"] = f"Bearer {HF_TOKEN}"
-
-        _safe_ping(f"{HF_SPACE_URL}/ping", headers, "HF")
+        _safe_ping(url, headers=headers, name=name)
+        time.sleep(interval)
 
 
-# ── Render Loop ─────────────────────────────────────────
-def _ping_render_loop():
-    time.sleep(10)
-    while True:
-        time.sleep(RENDER_PING_INTERVAL)
-
-        if not RENDER_URL:
-            continue
-
-        _safe_ping(f"{RENDER_URL}/ping", name="Render")
-
-
-# ── Public Starter ──────────────────────────────────────
 def start_keepalive(ping_hf=True, ping_render=False):
     global _started
+
+    if not KEEPALIVE_ENABLED:
+        logger.info("[Keepalive] disabled by ENABLE_KEEPALIVE")
+        return
 
     with _lock:
         if _started:
@@ -73,9 +49,20 @@ def start_keepalive(ping_hf=True, ping_render=False):
         _started = True
 
         if ping_hf and HF_SPACE_URL:
-            threading.Thread(target=_ping_hf_loop, daemon=True).start()
-            logger.info("[Keepalive] Render → HF active")
+            headers = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
+            threading.Thread(
+                target=_loop,
+                args=(f"{HF_SPACE_URL}/ping", HF_PING_INTERVAL, "HF", headers),
+                daemon=True,
+                name="keepalive-hf",
+            ).start()
+            logger.info("[Keepalive] Render -> HF active every %ss", HF_PING_INTERVAL)
 
         if ping_render and RENDER_URL:
-            threading.Thread(target=_ping_render_loop, daemon=True).start()
-            logger.info("[Keepalive] HF → Render active")
+            threading.Thread(
+                target=_loop,
+                args=(f"{RENDER_URL}/ping", RENDER_PING_INTERVAL, "Render", None),
+                daemon=True,
+                name="keepalive-render",
+            ).start()
+            logger.info("[Keepalive] Service -> Render active every %ss", RENDER_PING_INTERVAL)
