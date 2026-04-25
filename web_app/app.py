@@ -26,7 +26,7 @@ from backend.db import (
     prepare_history_export_rows,
 )
 from backend.recommendation_engine import generate_recommendation
-from backend.weather_api import get_weather_bundle
+from backend.weather_api import get_weather, get_weather_bundle
 from utils.inference import register_face, run_inference
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -155,6 +155,12 @@ def _detail_log_key(name: str, mask: str, glasses: str, weather: dict):
     )
 
 
+def _has_resolved_weather(weather: dict):
+    weather = weather or {}
+    city = str(weather.get("city") or "").strip().lower()
+    return bool(city and city != "unknown")
+
+
 @app.route("/ping")
 def ping():
     return jsonify({"ok": True, "service": "smartwear-web"})
@@ -170,8 +176,7 @@ def sidebar_weather():
 
     city = request.args.get("city")
 
-    bundle = get_weather_bundle(lat=lat, lon=lon, query=city)
-    current = bundle["current"]
+    current = get_weather(lat=lat, lon=lon, query=city)
     return jsonify(
         {
             "city": current.get("city", "Unknown"),
@@ -282,7 +287,7 @@ def detail(name):
         glasses,
         weather_bundle["current"],
     )
-    if session.get("last_detection_log_token") != log_token:
+    if _has_resolved_weather(weather_bundle["current"]) and session.get("last_detection_log_token") != log_token:
         try:
             log_detection(name, mask, glasses, weather_bundle["current"])
             session["last_detection_log_token"] = log_token
