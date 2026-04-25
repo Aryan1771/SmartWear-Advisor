@@ -1,7 +1,8 @@
 import logging
+import math
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -106,28 +107,51 @@ def _get_open_meteo_uv(lat, lon):
     if _round_coord(lat) is None or _round_coord(lon) is None:
         return None
 
-    try:
-        response = _session.get(
-            "https://api.open-meteo.com/v1/forecast",
-            params={
-                "latitude": _round_coord(lat),
-                "longitude": _round_coord(lon),
-                "current": "uv_index",
-                "timezone": "auto",
-            },
-            timeout=4,
-        )
-        response.raise_for_status()
-        value = response.json().get("current", {}).get("uv_index")
-        return round(float(value), 1) if value is not None else None
-    except Exception as exc:
-        logger.warning(
-            "Open-Meteo UV fallback failed for lat=%s lon=%s: %s",
-            _round_coord(lat),
-            _round_coord(lon),
-            exc,
-        )
+    last_error = None
+    for _ in range(2):
+        try:
+            response = _session.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": _round_coord(lat),
+                    "longitude": _round_coord(lon),
+                    "current": "uv_index",
+                    "timezone": "auto",
+                },
+                timeout=4,
+            )
+            response.raise_for_status()
+            value = response.json().get("current", {}).get("uv_index")
+            return round(float(value), 1) if value is not None else None
+        except Exception as exc:
+            last_error = exc
+            time.sleep(0.2)
+
+    logger.warning(
+        "Open-Meteo UV fallback failed for lat=%s lon=%s: %s",
+        _round_coord(lat),
+        _round_coord(lon),
+        last_error,
+    )
+    return None
+
+
+def _estimate_uv_index(lat, lon):
+    rounded_lat = _round_coord(lat)
+    rounded_lon = _round_coord(lon)
+    if rounded_lat is None or rounded_lon is None:
         return None
+
+    local_time = datetime.now(timezone.utc) + timedelta(hours=rounded_lon / 15)
+    hour = local_time.hour + local_time.minute / 60
+    if hour < 6 or hour > 18:
+        return 0.0
+
+    daylight_position = math.sin(math.pi * (hour - 6) / 12)
+    latitude_factor = max(0.45, 1 - abs(rounded_lat) / 90)
+    seasonal_factor = 0.75
+    estimate = 8.5 * daylight_position * latitude_factor * seasonal_factor
+    return round(max(0.0, min(11.0, estimate)), 1)
 
 
 def _has_coords(lat, lon):
@@ -158,6 +182,8 @@ def get_weather(lat=None, lon=None, query=None) -> dict:
         fallback_uv = _get_open_meteo_uv(lat, lon)
         if fallback_uv is not None:
             result["uv_index"] = fallback_uv
+        elif _estimate_uv_index(lat, lon) is not None:
+            result["uv_index"] = _estimate_uv_index(lat, lon)
         _set_cached(cache_key, result)
         return result
 
@@ -207,6 +233,11 @@ def get_weather(lat=None, lon=None, query=None) -> dict:
             fallback_uv = _get_open_meteo_uv(lat, lon)
             if fallback_uv is not None:
                 result["uv_index"] = fallback_uv
+
+        if result.get("uv_index") is None:
+            estimated_uv = _estimate_uv_index(lat, lon)
+            if estimated_uv is not None:
+                result["uv_index"] = estimated_uv
 
         aqi_response = _session.get(
             "https://api.openweathermap.org/data/2.5/air_pollution",

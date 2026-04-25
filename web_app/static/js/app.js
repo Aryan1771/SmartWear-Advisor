@@ -211,6 +211,7 @@ function redirectToDetail(result) {
   const params = new URLSearchParams({
     mask: result.mask,
     glasses: result.glasses,
+    log: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
   });
 
   if (state.coords.lat != null && state.coords.lon != null) {

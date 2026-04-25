@@ -4,6 +4,24 @@ def _normalize(val: str) -> str:
     return str(val).strip().lower()
 
 
+def _safe_int(value, default=0):
+    try:
+        if value is None or value == "" or str(value).strip().lower() in {"none", "null"}:
+            return default
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value, default=0.0):
+    try:
+        if value is None or value == "" or str(value).strip().lower() in {"none", "null"}:
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def generate_recommendation(
     weather: dict,
     mask_status: str,
@@ -21,11 +39,11 @@ def generate_recommendation(
     is_mask = "mask" in mask_status
     is_glasses = "glass" in glasses_status
 
-    temp = int(weather.get("temp", 25))
-    feels_like = int(weather.get("feels_like", temp))
+    temp = _safe_int(weather.get("temp"), 25)
+    feels_like = _safe_int(weather.get("feels_like"), temp)
     condition = _normalize(weather.get("condition", "clear"))
-    uv = float(weather.get("uv_index", 0))
-    aqi = int(weather.get("aqi", 1))
+    uv = _safe_float(weather.get("uv_index"), 0.0)
+    aqi = _safe_int(weather.get("aqi"), 1)
     aqi_label = weather.get("aqi_label", "Good")
 
     def add(msg):

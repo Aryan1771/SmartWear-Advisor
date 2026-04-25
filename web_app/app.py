@@ -188,13 +188,6 @@ def process_frame():
 
     result = _safe_result_payload(run_inference(image))
 
-    if result["recognized"]:
-        weather = _detection_weather_from_request(data)
-        try:
-            log_detection(result["name"], result["mask"], result["glasses"], weather)
-        except Exception as exc:
-            print(f"[APP] detection log failed: {exc}")
-
     return jsonify(result)
 
 
@@ -268,6 +261,14 @@ def detail(name):
     except Exception as exc:
         print(f"[APP] weather bundle failed: {exc}")
         weather_bundle = get_weather_bundle()
+
+    log_token = request.args.get("log")
+    if log_token and session.get("last_detection_log_token") != log_token:
+        try:
+            log_detection(name, mask, glasses, weather_bundle["current"])
+            session["last_detection_log_token"] = log_token
+        except Exception as exc:
+            print(f"[APP] detail detection log failed: {exc}")
 
     return render_template(
         "detail.html",
