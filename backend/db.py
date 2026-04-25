@@ -78,6 +78,15 @@ def _to_int(value, default=0):
         return default
 
 
+def _to_float(value, default=None):
+    try:
+        if value is None or value == "":
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _format_admin_timestamp(value):
     raw = str(value or "").strip()
     if not raw:
@@ -184,7 +193,7 @@ def log_detection(name: str, mask: str, glasses: str, weather: dict):
         "feels_like": int(weather.get("feels_like", 0) or 0),
         "aqi": int(weather.get("aqi", 0) or 0),
         "aqi_label": weather.get("aqi_label", ""),
-        "uv_index": float(weather.get("uv_index", 0) or 0),
+        "uv_index": _to_float(weather.get("uv_index")),
     }
 
     if _turso_ready:

@@ -278,7 +278,7 @@ async function refreshDetectionWeather() {
       feels_like: Number(payload.temp || 0),
       humidity: Number(payload.humidity || 0),
       aqi_label: payload.aqi_label || "",
-      uv_index: Number(payload.uv_index || 0),
+      uv_index: payload.uv_index == null || payload.uv_index === "" ? null : Number(payload.uv_index),
     };
   } catch (error) {
     state.weather = null;

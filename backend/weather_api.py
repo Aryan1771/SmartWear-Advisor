@@ -52,7 +52,7 @@ _FALLBACK_CURRENT = {
     "humidity": 50,
     "condition": "clear",
     "description": "Unavailable",
-    "uv_index": 0.0,
+    "uv_index": None,
     "aqi": 1,
     "aqi_label": "Good",
     "pm25": 0.0,
@@ -100,6 +100,34 @@ def _safe_float(value, default=None):
 
 def _weather_description(code):
     return WEATHER_CODES.get(int(code), "Unavailable")
+
+
+def _get_open_meteo_uv(lat, lon):
+    if _round_coord(lat) is None or _round_coord(lon) is None:
+        return None
+
+    try:
+        response = _session.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": _round_coord(lat),
+                "longitude": _round_coord(lon),
+                "current": "uv_index",
+                "timezone": "auto",
+            },
+            timeout=4,
+        )
+        response.raise_for_status()
+        value = response.json().get("current", {}).get("uv_index")
+        return round(float(value), 1) if value is not None else None
+    except Exception as exc:
+        logger.warning(
+            "Open-Meteo UV fallback failed for lat=%s lon=%s: %s",
+            _round_coord(lat),
+            _round_coord(lon),
+            exc,
+        )
+        return None
 
 
 def get_weather(lat=None, lon=None, query=None) -> dict:
@@ -167,6 +195,11 @@ def get_weather(lat=None, lon=None, query=None) -> dict:
             result["uv_index"] = round(
                 float(uv_response.json().get("current", {}).get("uvi", 0.0)), 1
             )
+
+        if result.get("uv_index") is None:
+            fallback_uv = _get_open_meteo_uv(lat, lon)
+            if fallback_uv is not None:
+                result["uv_index"] = fallback_uv
 
         aqi_response = _session.get(
             "https://api.openweathermap.org/data/2.5/air_pollution",

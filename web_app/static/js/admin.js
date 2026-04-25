@@ -34,7 +34,7 @@ function formatCell(value) {
 }
 
 function formatMetric(value) {
-  return value == null || value === "" || Number(value) === 0 ? "-" : String(value);
+  return value == null || value === "" ? "-" : String(value);
 }
 
 function emptyRow(colspan, message) {
