@@ -25,12 +25,6 @@ def _sql(sql: str, args: list = None):
     def _arg(value):
         if value is None:
             return {"type": "null"}
-        if isinstance(value, bool):
-            return {"type": "integer", "value": "1" if value else "0"}
-        if isinstance(value, int):
-            return {"type": "integer", "value": str(value)}
-        if isinstance(value, float):
-            return {"type": "float", "value": str(value)}
         return {"type": "text", "value": str(value)}
 
     payload = {
