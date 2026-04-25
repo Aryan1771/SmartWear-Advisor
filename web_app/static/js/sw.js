@@ -1,4 +1,4 @@
-const CACHE_NAME = "smartwear-static-v3";
+const CACHE_NAME = "smartwear-static-v4";
 const STATIC_ASSETS = ["/", "/static/css/style.css", "/static/manifest.json"];
 
 self.addEventListener("install", (event) => {

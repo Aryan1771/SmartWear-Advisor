@@ -130,6 +130,10 @@ def _get_open_meteo_uv(lat, lon):
         return None
 
 
+def _has_coords(lat, lon):
+    return _round_coord(lat) is not None and _round_coord(lon) is not None
+
+
 def get_weather(lat=None, lon=None, query=None) -> dict:
     cache_key = _cache_key(lat=lat, lon=lon, query=query)
     cached = _get_cached(cache_key)
@@ -139,7 +143,7 @@ def get_weather(lat=None, lon=None, query=None) -> dict:
     result = dict(_FALLBACK_CURRENT)
     params = {"appid": OWM_KEY, "units": "metric"}
 
-    if _round_coord(lat) is not None and _round_coord(lon) is not None:
+    if _has_coords(lat, lon):
         params["lat"] = _round_coord(lat)
         params["lon"] = _round_coord(lon)
     elif query:
@@ -151,6 +155,9 @@ def get_weather(lat=None, lon=None, query=None) -> dict:
 
     if not OWM_KEY:
         logger.warning("OWM_API_KEY is not configured; returning fallback weather data.")
+        fallback_uv = _get_open_meteo_uv(lat, lon)
+        if fallback_uv is not None:
+            result["uv_index"] = fallback_uv
         _set_cached(cache_key, result)
         return result
 
@@ -192,9 +199,9 @@ def get_weather(lat=None, lon=None, query=None) -> dict:
             timeout=4,
         )
         if uv_response.ok:
-            result["uv_index"] = round(
-                float(uv_response.json().get("current", {}).get("uvi", 0.0)), 1
-            )
+            uvi = uv_response.json().get("current", {}).get("uvi")
+            if uvi is not None:
+                result["uv_index"] = round(float(uvi), 1)
 
         if result.get("uv_index") is None:
             fallback_uv = _get_open_meteo_uv(lat, lon)

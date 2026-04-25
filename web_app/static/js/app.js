@@ -147,13 +147,14 @@ async function detectFrame() {
 
   const image = captureFrame(CAMERA.jpegQuality);
   const weather = state.weather || {};
+  const coords = state.coords || {};
   try {
     const response = await fetchWithTimeout(
       "/process_frame",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image, weather }),
+        body: JSON.stringify({ image, weather, coords }),
       },
       CAMERA.requestTimeoutMs
     );
@@ -278,6 +279,8 @@ async function refreshDetectionWeather() {
       feels_like: Number(payload.temp || 0),
       humidity: Number(payload.humidity || 0),
       aqi_label: payload.aqi_label || "",
+      lat: state.coords.lat,
+      lon: state.coords.lon,
       uv_index: payload.uv_index == null || payload.uv_index === "" ? null : Number(payload.uv_index),
     };
   } catch (error) {

@@ -30,11 +30,11 @@ const elements = {
 };
 
 function formatCell(value) {
-  return value == null || value === "" ? "-" : String(value);
+  return value == null || value === "" || String(value).toLowerCase() === "none" ? "-" : String(value);
 }
 
 function formatMetric(value) {
-  return value == null || value === "" ? "-" : String(value);
+  return value == null || value === "" || String(value).toLowerCase() === "none" ? "-" : String(value);
 }
 
 function emptyRow(colspan, message) {

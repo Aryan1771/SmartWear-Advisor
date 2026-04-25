@@ -22,13 +22,24 @@ def _sql(sql: str, args: list = None):
     if not _turso_ready:
         return []
 
+    def _arg(value):
+        if value is None:
+            return {"type": "null"}
+        if isinstance(value, bool):
+            return {"type": "integer", "value": "1" if value else "0"}
+        if isinstance(value, int):
+            return {"type": "integer", "value": str(value)}
+        if isinstance(value, float):
+            return {"type": "float", "value": str(value)}
+        return {"type": "text", "value": str(value)}
+
     payload = {
         "requests": [
             {
                 "type": "execute",
                 "stmt": {
                     "sql": sql,
-                    "args": [{"type": "text", "value": str(arg)} for arg in (args or [])],
+                    "args": [_arg(arg) for arg in (args or [])],
                 },
             },
             {"type": "close"},
@@ -80,7 +91,7 @@ def _to_int(value, default=0):
 
 def _to_float(value, default=None):
     try:
-        if value is None or value == "":
+        if value is None or value == "" or str(value).strip().lower() in {"none", "null"}:
             return default
         return float(value)
     except (TypeError, ValueError):
@@ -183,6 +194,7 @@ def add_user(name, image=None):
 
 
 def log_detection(name: str, mask: str, glasses: str, weather: dict):
+    weather = weather or {}
     row = {
         "name": name or "Unknown",
         "timestamp": datetime.now().isoformat(),

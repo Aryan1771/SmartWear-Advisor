@@ -91,6 +91,56 @@ def _csv_response(filename: str, fieldnames: list, rows: list):
     )
 
 
+def _safe_float(value):
+    try:
+        if value is None or value == "" or str(value).strip().lower() in {"none", "null"}:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _detection_weather_from_request(data: dict):
+    weather = dict(data.get("weather") or {})
+    coords = data.get("coords") or {}
+
+    lat = _safe_float(coords.get("lat") or weather.get("lat"))
+    lon = _safe_float(coords.get("lon") or weather.get("lon"))
+    city = str(weather.get("city") or "").strip()
+    uv_index = _safe_float(weather.get("uv_index"))
+    missing_weather = not city or city.lower() == "unknown" or uv_index is None
+
+    if missing_weather and (lat is not None and lon is not None or city):
+        try:
+            fresh = get_weather_bundle(
+                lat=lat,
+                lon=lon,
+                query=city if city and city.lower() != "unknown" else None,
+            )["current"]
+            for key, value in weather.items():
+                if value in (None, ""):
+                    continue
+                if key == "city" and str(value).strip().lower() == "unknown":
+                    continue
+                if key == "uv_index" and _safe_float(value) is None:
+                    continue
+                existing = fresh.get(key)
+                if existing in (None, "") or str(existing).strip().lower() == "unknown":
+                    fresh[key] = value
+            weather = fresh
+        except Exception as exc:
+            print(f"[APP] detection weather enrichment failed: {exc}")
+
+    if not weather.get("city"):
+        try:
+            weather = get_weather_bundle()["current"]
+        except Exception as exc:
+            print(f"[APP] detection weather fallback failed: {exc}")
+            weather = {}
+
+    return weather
+
+
 @app.route("/ping")
 def ping():
     return jsonify({"ok": True, "service": "smartwear-web"})
@@ -139,13 +189,7 @@ def process_frame():
     result = _safe_result_payload(run_inference(image))
 
     if result["recognized"]:
-        weather = data.get("weather") or {}
-        if not weather.get("city"):
-            try:
-                weather = get_weather_bundle()["current"]
-            except Exception as exc:
-                print(f"[APP] detection weather fallback failed: {exc}")
-                weather = {}
+        weather = _detection_weather_from_request(data)
         try:
             log_detection(result["name"], result["mask"], result["glasses"], weather)
         except Exception as exc:
