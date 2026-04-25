@@ -1,4 +1,5 @@
 import os
+from urllib.parse import quote
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
@@ -114,3 +115,21 @@ def register_face(name, image_base64):
         }
     except Exception:
         return {"success": False, "error": "hf_unreachable", "message": "HF service is unreachable."}
+
+
+def delete_face(name):
+    endpoint = _endpoint_url(f"user/{quote(str(name or ''), safe='')}")
+    if not endpoint:
+        return {"success": False, "error": "hf_not_configured"}
+
+    try:
+        response = _session.delete(endpoint, headers=HEADERS, timeout=8)
+        payload = _parse_json(response)
+        if response.status_code != 200:
+            return {
+                "success": False,
+                "error": payload.get("error") or f"hf_delete_failed_{response.status_code}",
+            }
+        return {"success": bool(payload.get("success")), "name": name}
+    except Exception:
+        return {"success": False, "error": "hf_unreachable"}

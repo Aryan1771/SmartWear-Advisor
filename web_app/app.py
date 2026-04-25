@@ -11,6 +11,7 @@ from backend.db import (
     add_user,
     clear_audit_history,
     clear_detection_history,
+    delete_registered_user,
     filter_audit_rows,
     filter_history_rows,
     get_audit_log,
@@ -27,7 +28,7 @@ from backend.db import (
 )
 from backend.recommendation_engine import generate_recommendation
 from backend.weather_api import get_weather, get_weather_bundle
-from utils.inference import register_face, run_inference
+from utils.inference import delete_face, register_face, run_inference
 
 BASE_DIR = Path(__file__).resolve().parent
 MAX_IMAGE_SIZE = 700_000
@@ -442,6 +443,37 @@ def delete_user_history():
 
     log_audit("admin_user_history_cleared", f"Admin cleared detection history for {name}", _client_ip())
     return jsonify({"success": True, "name": name})
+
+
+@app.route("/admin/user/delete", methods=["POST"])
+def delete_registered_user_route():
+    guard = _admin_required()
+    if guard:
+        return guard
+
+    data = request.get_json(silent=True) or {}
+    if not _admin_password_valid(data.get("password", "")):
+        return jsonify({"success": False, "error": "invalid_password"}), 403
+
+    name = str(data.get("name", "")).strip()
+    if not name:
+        return jsonify({"success": False, "error": "missing_name"}), 400
+
+    remote = delete_face(name)
+    local_deleted = delete_registered_user(name)
+    log_audit(
+        "admin_registered_user_deleted",
+        f"Admin deleted registered user {name}; hf_success={remote.get('success')}",
+        _client_ip(),
+    )
+    return jsonify(
+        {
+            "success": bool(local_deleted),
+            "name": name,
+            "hf_deleted": bool(remote.get("success")),
+            "hf_error": remote.get("error"),
+        }
+    )
 
 
 @app.route("/admin/audit/delete-all", methods=["POST"])

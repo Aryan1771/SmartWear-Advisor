@@ -336,6 +336,7 @@ async function registerUser() {
 
   try {
     setStatus("Saving registration...", "neutral");
+    const registrationImage = captureFrame(CAMERA.registerQuality);
     const response = await fetchWithTimeout(
       "/register",
       {
@@ -343,7 +344,7 @@ async function registerUser() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          image: captureFrame(CAMERA.registerQuality),
+          image: registrationImage,
         }),
       },
       CAMERA.registrationTimeoutMs
@@ -354,8 +355,38 @@ async function registerUser() {
     }
 
     showToast(payload.message || `Registered ${payload.name} successfully.`, "success");
-    setStatus("Registration complete. Press Start when you want to scan again.", "success");
-    stopCamera();
+    setStatus("Registration complete. Confirming the new face...", "success");
+
+    let verifyPayload = {};
+    try {
+      const verifyResponse = await fetchWithTimeout(
+        "/process_frame",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image: registrationImage,
+            weather: state.weather || {},
+            coords: state.coords || {},
+          }),
+        },
+        CAMERA.requestTimeoutMs
+      );
+      verifyPayload = await verifyResponse.json().catch(() => ({}));
+    } catch (verifyError) {
+      verifyPayload = {};
+    }
+
+    const detailResult = {
+      recognized: true,
+      name: verifyPayload.name && verifyPayload.name !== "Unknown" ? verifyPayload.name : payload.name || name.trim(),
+      mask: verifyPayload.mask || "No Mask",
+      glasses: verifyPayload.glasses || "No Glasses",
+      box: verifyPayload.box || null,
+    };
+    stopTracks();
+    stopLoop();
+    redirectToDetail(detailResult);
   } catch (error) {
     setMode("halted");
     setStatus("Registration failed. You can retry safely.", "danger");

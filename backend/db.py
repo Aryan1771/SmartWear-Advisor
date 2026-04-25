@@ -187,6 +187,25 @@ def add_user(name, image=None):
     add_user_to_db(name)
 
 
+def delete_registered_user(name: str):
+    clean_name = str(name or "").strip()
+    if not clean_name:
+        return False
+
+    if _turso_ready:
+        try:
+            _sql("DELETE FROM detection_log WHERE name = ?", [clean_name])
+            _sql("DELETE FROM registered_users WHERE name = ?", [clean_name])
+            return True
+        except Exception as exc:
+            print(f"[DB] delete registered user error: {exc}")
+            return False
+
+    _mem_detections[:] = [row for row in _mem_detections if row.get("name") != clean_name]
+    _mem_users.pop(clean_name, None)
+    return True
+
+
 def log_detection(name: str, mask: str, glasses: str, weather: dict):
     weather = weather or {}
     row = {
