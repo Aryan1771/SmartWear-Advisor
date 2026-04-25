@@ -139,6 +139,26 @@ export function initAppShell() {
   bindInstallPrompt();
 }
 
+function requestBrowserLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          lat: Number(position.coords.latitude.toFixed(6)),
+          lon: Number(position.coords.longitude.toFixed(6)),
+        });
+      },
+      () => resolve(null),
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
+    );
+  });
+}
+
 export async function loadSidebarWeather(coords = null) {
   const widget = document.querySelector("[data-sidebar-weather]");
   if (!widget) {
@@ -154,10 +174,11 @@ export async function loadSidebarWeather(coords = null) {
     status.textContent = "Loading local weather...";
   }
 
+  const resolvedCoords = coords || await requestBrowserLocation();
   const params = new URLSearchParams();
-  if (coords?.lat != null && coords?.lon != null) {
-    params.set("lat", String(coords.lat));
-    params.set("lon", String(coords.lon));
+  if (resolvedCoords?.lat != null && resolvedCoords?.lon != null) {
+    params.set("lat", String(resolvedCoords.lat));
+    params.set("lon", String(resolvedCoords.lon));
   }
 
   const url = `/api/sidebar-weather${params.toString() ? `?${params.toString()}` : ""}`;

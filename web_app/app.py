@@ -1,6 +1,7 @@
 import json
 import os
 from csv import DictWriter
+from datetime import datetime
 from io import StringIO
 from pathlib import Path
 
@@ -141,6 +142,19 @@ def _detection_weather_from_request(data: dict):
     return weather
 
 
+def _detail_log_key(name: str, mask: str, glasses: str, weather: dict):
+    timestamp_bucket = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    return "|".join(
+        [
+            timestamp_bucket,
+            str(name or "Unknown"),
+            str(mask or "Unknown"),
+            str(glasses or "Unknown"),
+            str((weather or {}).get("city") or "Unknown"),
+        ]
+    )
+
+
 @app.route("/ping")
 def ping():
     return jsonify({"ok": True, "service": "smartwear-web"})
@@ -262,8 +276,13 @@ def detail(name):
         print(f"[APP] weather bundle failed: {exc}")
         weather_bundle = get_weather_bundle()
 
-    log_token = request.args.get("log")
-    if log_token and session.get("last_detection_log_token") != log_token:
+    log_token = request.args.get("log") or _detail_log_key(
+        name,
+        mask,
+        glasses,
+        weather_bundle["current"],
+    )
+    if session.get("last_detection_log_token") != log_token:
         try:
             log_detection(name, mask, glasses, weather_bundle["current"])
             session["last_detection_log_token"] = log_token
