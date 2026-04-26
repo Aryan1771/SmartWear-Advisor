@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+face-recognition
+tflite-runtime
+opencv
