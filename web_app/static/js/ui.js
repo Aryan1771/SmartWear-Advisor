@@ -194,7 +194,7 @@ export async function loadSidebarWeather(coords = null) {
       city.textContent = payload.city || "Unknown";
     }
     if (status) {
-      status.textContent = `${payload.temp ?? "--"} C | ${payload.condition || "Unavailable"}`;
+      status.textContent = `${payload.temp ?? "--"} °C | ${payload.condition || "Unavailable"}`;
     }
     if (metaPrimary) {
       metaPrimary.textContent = `Humidity ${payload.humidity ?? "--"}%`;
