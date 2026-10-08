@@ -15,8 +15,10 @@
 ```bash
 python --version          # 3.11+
 pip install -r requirements.txt
-# Generate PWA icons (once)
-cd web_app/static && python generate_icons.py && cd ../..
+# Optional: regenerate the existing PWA icons
+python -m pip install Pillow
+python static/generate_icons.py
+cp static/icons/icon-*.png web_app/static/icons/
 ```
 
 ---
@@ -52,7 +54,7 @@ turso db tokens create smartwear       # copy this → TURSO_TOKEN
 1. huggingface.co → New Space → SDK: **Docker** → Visibility: **Public**
 2. Upload the entire `hf_space/` folder contents to the Space repo
 3. Upload `models/*.tflite` and `models/*_labels.txt` to `models/`
-4. Space builds in ~5-10 min. URL: `https://USERNAME-smartwear.hf.space`
+4. Build time depends on the service and dependencies. Example URL: `https://USERNAME-smartwear.hf.space`
 5. Test: `curl https://USERNAME-smartwear.hf.space/ping`
 
 ---
@@ -109,7 +111,7 @@ cd hf_space && uvicorn app:app --reload --port 8000
 
 | Problem | Fix |
 |---------|-----|
-| "Inference server unavailable" | HF Space cold-starting (~30s). Wait and retry. |
+| "Inference server unavailable" | Check inference-service logs, availability, and configured URL; retry after startup. |
 | Registration fails | Check lighting. Blink liveness needs MediaPipe CDN. |
 | No bounding box | `box: null` means no face detected — expected. |
 | Yellow box | Unknown face. Green box = registered face. |
